@@ -203,13 +203,17 @@ interface WeddingContextType {
   pairWithPartner: (inviteCode: string) => Promise<{ success: boolean; message: string }>;
   unpairPartner: () => Promise<{ success: boolean; message: string }>;
   generateNewInviteCode: () => void;
+  syncNow: () => Promise<boolean>;
+  refreshWorkspace: () => Promise<void>;
 
   // Project Actions
   updateWedding: (data: Partial<WeddingProject>) => void;
   addSavingContribution: (item: Omit<SavingContribution, "id">) => void;
+  editSavingContribution: (idx: number, item: Omit<SavingContribution, "percentage">) => void;
   deleteSavingContribution: (idx: number) => void;
 
   addChecklist: (item: Omit<ChecklistItem, "id">) => void;
+  editChecklist: (item: ChecklistItem) => void;
   toggleChecklist: (id: string) => void;
   deleteChecklist: (id: string) => void;
 
@@ -219,6 +223,7 @@ interface WeddingContextType {
   deleteSeserahan: (id: string) => void;
 
   addPostWedding: (item: Omit<PostWeddingItem, "id">) => void;
+  editPostWedding: (item: PostWeddingItem) => void;
   togglePostWedding: (id: string) => void;
   claimPostWedding: (id: string, friendName: string) => void;
   deletePostWedding: (id: string) => void;
@@ -240,12 +245,16 @@ interface WeddingContextType {
   deleteBudgetCategory: (id: string) => void;
 
   addVendor: (item: Omit<VendorMilestone, "id">) => void;
+  editVendor: (item: VendorMilestone) => void;
   toggleVendorStage: (vendorId: string, stageIdx: number) => void;
   deleteVendor: (id: string) => void;
 
   updateAlignmentAnswer: (id: string, role: "GROOM" | "BRIDE", answer: string) => void;
   toggleAlignmentAgreed: (id: string) => void;
   addAlignmentTopic: (question: string, category: AlignmentTopic["category"]) => void;
+  editAlignmentTopic: (id: string, question: string, category: AlignmentTopic["category"]) => void;
+  deleteAlignmentTopic: (id: string) => void;
+  loadRecommendedAlignmentTopics: () => void;
 
   toggleAdminRequirement: (stepId: string, reqId: string) => void;
   addActivity: (userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string) => void;
@@ -276,12 +285,18 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const [rundown, setRundown] = useState<RundownItem[]>([]);
   const [budgetCategories, setBudgetCategories] = useState<BudgetCategory[]>([]);
   const [vendors, setVendors] = useState<VendorMilestone[]>([]);
-  const [alignmentTopics, setAlignmentTopics] = useState<AlignmentTopic[]>(defaultAlignmentTopics);
+  const [alignmentTopics, setAlignmentTopics] = useState<AlignmentTopic[]>([]);
   const [adminSteps, setAdminSteps] = useState<AdminStep[]>(officialAdminSteps);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
 
   const { data: session } = useSession();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingAuthCallbackRef = useRef<(() => void) | null>(null);
+  const currentUserRef = useRef<User | null>(currentUser);
+
+  useEffect(() => {
+    currentUserRef.current = currentUser;
+  }, [currentUser]);
 
   // Sync NextAuth session with currentUser
   useEffect(() => {
@@ -309,11 +324,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session]);
 
-  // Load from Database whenever user logs in
+  // Load from Database whenever user logs in or polls
   const fetchDbData = useCallback(async (email?: string, code?: string) => {
     try {
-      const query = email
-        ? `email=${encodeURIComponent(email)}`
+      const activeUser = currentUserRef.current;
+      const activeEmail = (email || activeUser?.email || "").toLowerCase().trim();
+      const query = activeEmail
+        ? `email=${encodeURIComponent(activeEmail)}${code ? `&code=${encodeURIComponent(code)}` : ""}`
         : code
         ? `code=${encodeURIComponent(code)}`
         : "";
@@ -322,8 +339,89 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       const res = await fetch(`/api/wedding/sync?${query}`);
       const data = await res.json();
 
-      if (data.success && data.exists && data.wedding) {
-        setWedding(data.wedding);
+      if (data.success && data.exists) {
+        if (data.user) {
+          setCurrentUser((prev) => ({
+            id: data.user.id || prev?.id || `u-${Date.now()}`,
+            name: data.user.name || prev?.name || "Calon Pengantin",
+            nickname: data.user.nickname || prev?.nickname || "Saya",
+            email: data.user.email || prev?.email || "",
+            image: data.user.image || prev?.image,
+            avatarCardId: data.user.avatarCardId || prev?.avatarCardId || "cat-prince",
+            role: data.user.role || prev?.role || "GROOM",
+            phone: data.user.phone || prev?.phone || "",
+            bio: data.user.bio || prev?.bio || "",
+            provider: prev?.provider || "google",
+          }));
+        }
+
+        if (data.wedding) {
+          setWedding((prev) => {
+            const userNow = currentUserRef.current;
+            let partnerInfo = data.wedding.partnerInfo;
+
+            // Reciprocal partner resolution using couple data
+            if (data.wedding.couple && userNow?.email) {
+              const myEmail = userNow.email.toLowerCase().trim();
+              const u1 = data.wedding.couple.user1;
+              const u2 = data.wedding.couple.user2;
+              if (u1 && u1.email && u1.email.toLowerCase().trim() === myEmail) {
+                partnerInfo = u2;
+              } else if (u2 && u2.email && u2.email.toLowerCase().trim() === myEmail) {
+                partnerInfo = u1;
+              }
+            }
+
+            // Infallible Safeguard: A user can NEVER be their own partner!
+            if (partnerInfo && userNow) {
+              const myEmail = (userNow.email || "").toLowerCase().trim();
+              const myName = (userNow.name || "").toLowerCase().trim();
+              const pEmail = (partnerInfo.email || "").toLowerCase().trim();
+              const pName = (partnerInfo.name || "").toLowerCase().trim();
+
+              const isSelf =
+                (myEmail && pEmail && myEmail === pEmail) ||
+                (myName && pName && myName === pName) ||
+                (userNow.role && partnerInfo.role && userNow.role === partnerInfo.role);
+
+              if (isSelf) {
+                if (userNow.role === "GROOM") {
+                  partnerInfo = {
+                    name: data.wedding.brideName || prev.brideName || "Calon Istri",
+                    role: "BRIDE",
+                    email: data.wedding.primaryUserEmail || "",
+                    avatarCardId: "duck-bride",
+                  };
+                } else {
+                  partnerInfo = {
+                    name: data.wedding.groomName || prev.groomName || "Calon Suami",
+                    role: "GROOM",
+                    email: data.wedding.partnerUserEmail || "",
+                    avatarCardId: "penguin-groom",
+                  };
+                }
+              }
+            }
+
+            // If partner newly connected in the database, announce activity
+            if (!prev.isPartnerConnected && data.wedding.isPartnerConnected) {
+              addActivity(
+                partnerInfo?.name || "Pasangan",
+                partnerInfo?.role || "BRIDE",
+                "Berhasil terhubung ke Duo Workspace! Rencana kini tersinkron."
+              );
+            }
+
+            return {
+              ...prev,
+              ...data.wedding,
+              partnerInfo: partnerInfo || prev.partnerInfo,
+              // Keep existing ID if valid UUID
+              id: data.wedding.id || prev.id,
+            };
+          });
+        }
+
         if (data.planData) {
           const p = data.planData;
           if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
@@ -352,6 +450,34 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [currentUser?.email, fetchDbData]);
 
+  // Periodic background synchronization (every 6 seconds when window active)
+  useEffect(() => {
+    if (!isInitialized) return;
+
+    const pollSync = () => {
+      if (typeof document !== "undefined" && document.hidden) return;
+      if (currentUser?.email) {
+        fetchDbData(currentUser.email);
+      } else if (wedding.inviteCode && wedding.inviteCode !== "HAJAT-89X2") {
+        fetchDbData(undefined, wedding.inviteCode);
+      }
+    };
+
+    const intervalId = setInterval(pollSync, 6000);
+    const handleVisibilityChange = () => {
+      if (typeof document !== "undefined" && !document.hidden) {
+        pollSync();
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      clearInterval(intervalId);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isInitialized, currentUser?.email, wedding.inviteCode, fetchDbData]);
+
   // 1. Initial Load from LocalStorage
   useEffect(() => {
     try {
@@ -365,19 +491,31 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        if (parsed.wedding) setWedding(parsed.wedding);
-        if (parsed.savingContributions) setSavingContributions(parsed.savingContributions);
-        if (parsed.checklist) setChecklist(parsed.checklist);
-        if (parsed.seserahan) setSeserahan(parsed.seserahan);
-        if (parsed.postWedding) setPostWedding(parsed.postWedding);
-        if (parsed.guests) setGuests(parsed.guests);
-        if (parsed.familyQuota) setFamilyQuota(parsed.familyQuota);
-        if (parsed.rundown) setRundown(parsed.rundown);
-        if (parsed.budgetCategories) setBudgetCategories(parsed.budgetCategories);
-        if (parsed.vendors) setVendors(parsed.vendors);
-        if (parsed.alignmentTopics) setAlignmentTopics(parsed.alignmentTopics);
-        if (parsed.adminSteps) setAdminSteps(parsed.adminSteps);
-        if (parsed.activityLogs) setActivityLogs(parsed.activityLogs);
+        // If stored data contains legacy mock template data ("Heru & Nurul"), purge it cleanly
+        const isLegacyMock =
+          parsed.wedding &&
+          (parsed.wedding.title === "Pernikahan Heru & Nurul" ||
+            parsed.wedding.slug === "heru-nurul" ||
+            parsed.wedding.groomName === "Muhammad Heru" ||
+            parsed.wedding.inviteCode === "HAJAT-89X2");
+
+        if (isLegacyMock && !storedUser) {
+          localStorage.removeItem(STORAGE_KEY);
+        } else {
+          if (parsed.wedding) setWedding(parsed.wedding);
+          if (parsed.savingContributions) setSavingContributions(parsed.savingContributions);
+          if (parsed.checklist) setChecklist(parsed.checklist);
+          if (parsed.seserahan) setSeserahan(parsed.seserahan);
+          if (parsed.postWedding) setPostWedding(parsed.postWedding);
+          if (parsed.guests) setGuests(parsed.guests);
+          if (parsed.familyQuota) setFamilyQuota(parsed.familyQuota);
+          if (parsed.rundown) setRundown(parsed.rundown);
+          if (parsed.budgetCategories) setBudgetCategories(parsed.budgetCategories);
+          if (parsed.vendors) setVendors(parsed.vendors);
+          if (parsed.alignmentTopics) setAlignmentTopics(parsed.alignmentTopics);
+          if (parsed.adminSteps) setAdminSteps(parsed.adminSteps);
+          if (parsed.activityLogs) setActivityLogs(parsed.activityLogs);
+        }
       }
     } catch (e) {
       console.error("Failed to load stored wedding data", e);
@@ -439,7 +577,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
     saveTimeoutRef.current = setTimeout(async () => {
       try {
-        await fetch("/api/wedding/sync", {
+        const res = await fetch("/api/wedding/sync", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -459,6 +597,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             user: currentUser,
           }),
         });
+        const resData = await res.json();
+        if (resData.success && resData.weddingId) {
+          setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId } : prev));
+        }
       } catch (e) {
         console.warn("Auto-save to database deferred", e);
       }
@@ -484,6 +626,51 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     adminSteps,
     activityLogs,
   ]);
+
+  // Explicit sync triggered on actions like copying invite code or link
+  const syncNow = async (): Promise<boolean> => {
+    try {
+      const res = await fetch("/api/wedding/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          wedding,
+          savingContributions,
+          checklist,
+          seserahan,
+          postWedding,
+          guests,
+          familyQuota,
+          rundown,
+          budgetCategories,
+          vendors,
+          alignmentTopics,
+          adminSteps,
+          activityLogs,
+          user: currentUser,
+        }),
+      });
+      const resData = await res.json();
+      if (resData.success && resData.weddingId) {
+        setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId } : prev));
+        return true;
+      }
+      return false;
+    } catch (e) {
+      console.warn("Manual sync error", e);
+      return false;
+    }
+  };
+
+  const refreshWorkspace = useCallback(async () => {
+    if (currentUser?.email) {
+      await fetchDbData(currentUser.email);
+    } else if (wedding.inviteCode && wedding.inviteCode !== "HAJAT-89X2") {
+      await fetchDbData(undefined, wedding.inviteCode);
+    } else {
+      await syncNow();
+    }
+  }, [currentUser?.email, wedding.inviteCode, fetchDbData]);
 
   // Save auth user to localStorage
   useEffect(() => {
@@ -535,11 +722,18 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     });
 
     addActivity(user.name, user.role, "Berhasil masuk ke Hajat Kita");
+
+    // Execute pending action after login if exists
+    if (pendingAuthCallbackRef.current) {
+      const cb = pendingAuthCallbackRef.current;
+      pendingAuthCallbackRef.current = null;
+      setTimeout(() => cb(), 150);
+    }
   };
 
   const loginWithGoogle = () => {
-    // Initiate Google OAuth flow via NextAuth
-    signIn("google", { callbackUrl: window.location.href });
+    const origin = typeof window !== "undefined" ? window.location.origin : "";
+    signIn("google", { redirectTo: origin || "/", callbackUrl: origin || "/" });
   };
 
   const logout = async () => {
@@ -665,6 +859,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const requireAuth = (callback?: () => void): boolean => {
     if (!currentUser) {
+      if (callback) {
+        pendingAuthCallbackRef.current = callback;
+      }
       setIsAuthModalOpen(true);
       return false;
     }
@@ -713,6 +910,17 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan setoran tabungan: ${item.label} (Rp ${item.amount.toLocaleString("id-ID")})`);
   };
 
+  const editSavingContribution = (idx: number, item: Omit<SavingContribution, "percentage">) => {
+    const newItems = savingContributions.map((c, i) => (i === idx ? { ...c, ...item } : c));
+    const total = newItems.reduce((acc, c) => acc + c.amount, 0);
+    const withPercentages = newItems.map((c) => ({
+      ...c,
+      percentage: total > 0 ? Number(((c.amount / total) * 100).toFixed(1)) : 0,
+    }));
+    setSavingContributions(withPercentages);
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui setoran tabungan: ${item.label}`);
+  };
+
   const deleteSavingContribution = (idx: number) => {
     const newItems = savingContributions.filter((_, i) => i !== idx);
     const total = newItems.reduce((acc, c) => acc + c.amount, 0);
@@ -730,6 +938,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     };
     setChecklist((prev) => [newItem, ...prev]);
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan tugas baru: ${item.title}`);
+  };
+
+  const editChecklist = (item: ChecklistItem) => {
+    setChecklist((prev) => prev.map((c) => (c.id === item.id ? item : c)));
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui tugas: ${item.title}`);
   };
 
   const toggleChecklist = (id: string) => {
@@ -778,6 +991,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     };
     setPostWedding((prev) => [newItem, ...prev]);
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan wishlist rumah pasca-nikah: ${item.name}`);
+  };
+
+  const editPostWedding = (item: PostWeddingItem) => {
+    setPostWedding((prev) => prev.map((p) => (p.id === item.id ? item : p)));
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui wishlist pasca-nikah: ${item.name}`);
   };
 
   const togglePostWedding = (id: string) => {
@@ -897,6 +1115,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan kontrak vendor: ${item.vendorName}`);
   };
 
+  const editVendor = (item: VendorMilestone) => {
+    setVendors((prev) => prev.map((v) => (v.id === item.id ? item : v)));
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui kontrak vendor: ${item.vendorName}`);
+  };
+
   const toggleVendorStage = (vendorId: string, stageIdx: number) => {
     setVendors((prev) =>
       prev.map((vm) => {
@@ -949,6 +1172,21 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setAlignmentTopics((prev) => [...prev, newTopic]);
   };
 
+  const editAlignmentTopic = (id: string, question: string, category: AlignmentTopic["category"]) => {
+    setAlignmentTopics((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, question, category } : t))
+    );
+  };
+
+  const deleteAlignmentTopic = (id: string) => {
+    setAlignmentTopics((prev) => prev.filter((t) => t.id !== id));
+  };
+
+  const loadRecommendedAlignmentTopics = () => {
+    setAlignmentTopics(defaultAlignmentTopics);
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Memuat rekomendasi topik diskusi pranikah");
+  };
+
   const toggleAdminRequirement = (stepId: string, reqId: string) => {
     setAdminSteps((prev) =>
       prev.map((step) =>
@@ -974,7 +1212,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setRundown([]);
     setBudgetCategories([]);
     setVendors([]);
-    setAlignmentTopics(defaultAlignmentTopics.map((t) => ({ ...t, groomAnswer: "", brideAnswer: "", isAgreed: false })));
+    setAlignmentTopics([]);
     setAdminSteps(officialAdminSteps.map((s) => ({ ...s, requirements: s.requirements.map((r) => ({ ...r, isDone: false })) })));
     setActivityLogs([]);
     setWedding(cleanEmptyWedding);
@@ -982,204 +1220,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     addActivity(currentUser?.name || "Pengguna", currentUser?.role || "GROOM", "Mengosongkan seluruh data rencana pernikahan");
   };
 
-  // Load realistic template starter
+  // Clean template / reset
   const loadTemplateData = () => {
-    setWedding({
-      id: "w-main",
-      title: "Pernikahan Heru & Nurul",
-      groomName: "Muhammad Heru",
-      brideName: "Nurul Fathonah",
-      weddingDate: "2026-12-19T08:00:00.000Z",
-      city: "Bandung, Jawa Barat",
-      targetBudget: 120000000,
-      currentSavings: 82500000,
-      inviteCode: "HAJAT-89X2",
-      slug: "heru-nurul",
-      venueName: "Grand Ballroom Bandung",
-      venueAddress: "Jl. Diponegoro No. 1, Bandung",
-      maharDetails: "Logam Mulia Antam 10 Gram & Seperangkat Alat Sholat",
-      waliNikah: "Bpk. H. Rahmat Sudrajat",
-      penghulu: "Drs. H. Ahmad Fauzi, M.Ag (KUA Coblong)",
-      saksiNikah: "Keluarga Besar Kedua Mempelai",
-      isPartnerConnected: true,
-      partnerInfo: {
-        name: "Nurul Fathonah",
-        role: "BRIDE",
-        email: "nurul.fathonah@gmail.com",
-      },
-    });
-
-    setSavingContributions([
-      { label: "Tabungan Heru (Suami)", amount: 46000000, percentage: 55.8, color: "#1D50A2" },
-      { label: "Tabungan Nurul (Istri)", amount: 28500000, percentage: 34.5, color: "#5D92DC" },
-      { label: "Hibah Keluarga", amount: 8000000, percentage: 9.7, color: "#C9DEF5" },
-    ]);
-
-    setChecklist([
-      {
-        id: "chk-1",
-        title: "Pengurusan Surat Pengantar RT/RW & Kelurahan (N1-N4)",
-        description: "Bawa berkas KTP, KK, dan Akta Kelahiran kedua calon mempelai.",
-        category: "ADMINISTRASI_KUA",
-        timelineTag: "H-3 Bulan",
-        status: "COMPLETED",
-        assignedTo: "Heru (Suami)",
-        isOfficialKUA: true,
-      },
-      {
-        id: "chk-2",
-        title: "Pemeriksaan Kesehatan Puskesmas & Sertifikat Elsimil",
-        description: "Skrining HB, suntik TT catin wanita, download sertifikat Elsimil BKKBN.",
-        category: "ADMINISTRASI_KUA",
-        timelineTag: "H-3 Bulan",
-        status: "COMPLETED",
-        assignedTo: "Nurul (Istri)",
-        isOfficialKUA: true,
-      },
-      {
-        id: "chk-3",
-        title: "Pendaftaran Online SIMKAH Kemenag & Kode Billing",
-        description: "Daftar di simkah4.kemenag.go.id, upload pas foto latar biru 2x3 & 4x6.",
-        category: "ADMINISTRASI_KUA",
-        timelineTag: "H-2 Bulan",
-        status: "IN_PROGRESS",
-        assignedTo: "Bersama",
-        isOfficialKUA: true,
-      },
-      {
-        id: "chk-4",
-        title: "Finalisasi Booking Venue & Katering (DP)",
-        description: "Food testing 6 menu gubukan dan lock tanggal gedung.",
-        category: "VENUE_CATERING",
-        timelineTag: "H-6 Bulan",
-        status: "COMPLETED",
-        assignedTo: "Bersama",
-      },
-    ]);
-
-    setSeserahan([
-      {
-        id: "ses-1",
-        boxNumber: 1,
-        boxName: "Box 1: Perlengkapan Ibadah",
-        name: "Set Mukena Silk Premium & Sajadah",
-        brand: "Royale Premium Silk",
-        category: "Ibadah",
-        estimatedPrice: 1250000,
-        actualPrice: 1150000,
-        purchaseUrl: "https://shopee.co.id",
-        isPurchased: true,
-        notes: "Warna Rose Gold Soft",
-      },
-      {
-        id: "ses-2",
-        boxNumber: 2,
-        boxName: "Box 2: Skincare & Body Care",
-        name: "Crystallure Supreme Revitalizing Set",
-        brand: "Wardah Crystallure",
-        category: "Perawatan Wajah",
-        estimatedPrice: 1400000,
-        actualPrice: 1350000,
-        purchaseUrl: "https://shopee.co.id",
-        isPurchased: true,
-        notes: "Lengkap dengan essence & serum",
-      },
-    ]);
-
-    setPostWedding([
-      {
-        id: "pw-1",
-        name: "Kasur Springbed Orthopedic 160x200 (Queen Size)",
-        roomCategory: "Kamar Tidur",
-        brand: "Comforta Perfect Choice",
-        price: 4850000,
-        purchaseUrl: "https://tokopedia.com",
-        priority: "MUST_HAVE",
-        isAcquired: true,
-        isGiftClaimable: false,
-        claimedBy: "Tabungan Bersama",
-      },
-      {
-        id: "pw-2",
-        name: "Kulkas 2 Pintu Inverter Smart Cooling 210L",
-        roomCategory: "Dapur",
-        brand: "LG Inverter",
-        price: 3550000,
-        purchaseUrl: "https://tokopedia.com",
-        priority: "MUST_HAVE",
-        isAcquired: false,
-        isGiftClaimable: true,
-      },
-    ]);
-
-    setGuests([
-      {
-        id: "g-1",
-        name: "Bpk. H. Hendra Wijaya & Keluarga",
-        side: "GROOM",
-        category: "Keluarga Inti",
-        pax: 4,
-        phone: "081234567890",
-        rsvpStatus: "CONFIRMED_ATTENDING",
-        envelopeAmount: 1000000,
-      },
-      {
-        id: "g-2",
-        name: "Ibu Dra. Hj. Ratna Sari",
-        side: "BRIDE",
-        category: "Keluarga Inti",
-        pax: 2,
-        phone: "081398765432",
-        rsvpStatus: "CONFIRMED_ATTENDING",
-        envelopeAmount: 750000,
-      },
-    ]);
-
-    setRundown([
-      {
-        id: "rd-1",
-        startTime: "05:00",
-        endTime: "07:30",
-        activity: "Make Up & Rias Pengantin, Ibu, dan Bridesmaids",
-        picName: "MUA Wardah Gallery",
-        picPhone: "081299887766",
-        location: "Ruang Rias Utama Gedung",
-        phase: "Akad Nikah",
-      },
-      {
-        id: "rd-2",
-        startTime: "08:00",
-        endTime: "09:00",
-        activity: "Pelaksanaan Akad Nikah (Ijab Qabul, Khutbah Nikah)",
-        picName: "Penghulu KUA & Saksi",
-        picPhone: "081188990011",
-        location: "Meja Akad Nikah",
-        phase: "Akad Nikah",
-      },
-    ]);
-
-    setBudgetCategories([
-      { id: "b-1", name: "Venue & Gedung Ballroom", allocated: 28000000, spent: 28000000, status: "LUNAS", vendor: "Grand Ballroom Bandung" },
-      { id: "b-2", name: "Katering Utama & Gubukan (500 Pax)", allocated: 42500000, spent: 20000000, status: "DP_TERBAYAR", vendor: "Royal Catering" },
-      { id: "b-3", name: "Rias Pengantin (MUA) & Busana", allocated: 15000000, spent: 7500000, status: "DP_TERBAYAR", vendor: "Wedding Gallery" },
-    ]);
-
-    setVendors([
-      {
-        id: "vm-1",
-        vendorName: "Grand Ballroom Bandung",
-        serviceType: "Gedung / Venue",
-        totalContract: 28000000,
-        stages: [
-          { name: "DP Booking Tanggal", percentage: 20, amount: 5600000, isPaid: true, condition: "Kwitansi & Lock tanggal" },
-          { name: "Termin 2 (Technical Meeting)", percentage: 40, amount: 11200000, isPaid: true, condition: "Layout panggung disepakati" },
-          { name: "Pelunasan H-14", percentage: 40, amount: 11200000, isPaid: true, condition: "Final briefing bersama WO" },
-        ],
-      },
-    ]);
-
-    addActivity("Calon Pengantin", "GROOM", "Memuat template contoh rencana pernikahan");
+    clearAllData();
   };
+
 
   return (
     <WeddingContext.Provider
@@ -1217,11 +1262,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         pairWithPartner,
         unpairPartner,
         generateNewInviteCode,
+        syncNow,
+        refreshWorkspace,
 
         updateWedding,
         addSavingContribution,
+        editSavingContribution,
         deleteSavingContribution,
         addChecklist,
+        editChecklist,
         toggleChecklist,
         deleteChecklist,
         addSeserahan,
@@ -1229,6 +1278,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         editSeserahan,
         deleteSeserahan,
         addPostWedding,
+        editPostWedding,
         togglePostWedding,
         claimPostWedding,
         deletePostWedding,
@@ -1245,11 +1295,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         updateBudgetCategory,
         deleteBudgetCategory,
         addVendor,
+        editVendor,
         toggleVendorStage,
         deleteVendor,
         updateAlignmentAnswer,
         toggleAlignmentAgreed,
         addAlignmentTopic,
+        editAlignmentTopic,
+        deleteAlignmentTopic,
+        loadRecommendedAlignmentTopics,
         toggleAdminRequirement,
         addActivity,
         clearAllData,

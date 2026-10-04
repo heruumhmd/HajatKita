@@ -10,6 +10,7 @@ import { useWedding } from "@/context/wedding-context";
 import { CuteCardGallery } from "@/components/profile/cute-card-gallery";
 import { CuteCardItem } from "@/components/profile/cute-card-badge";
 import { getCuteCard, getDefaultCuteCardForRole } from "@/lib/cute-cards";
+import { showToastSuccess, showToastInfo } from "@/lib/swal";
 
 export function AuthModal() {
   const { isAuthModalOpen, setIsAuthModalOpen, login, loginWithGoogle } = useWedding();
@@ -29,6 +30,11 @@ export function AuthModal() {
     setSelectedCardId(getDefaultCuteCardForRole(newRole).id);
   };
 
+  const handleGoogleLogin = () => {
+    showToastInfo("Mengarahkan ke Google Sign-In...");
+    loginWithGoogle();
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!fullName.trim() || !email.trim()) return;
@@ -43,6 +49,7 @@ export function AuthModal() {
       avatarCardId: selectedCardId,
       provider: "credentials",
     });
+    showToastSuccess("Berhasil masuk! Selamat datang di Hajat Kita 🎉");
   };
 
   const currentCard = getCuteCard(selectedCardId);
@@ -84,7 +91,7 @@ export function AuthModal() {
           {/* Google Sign In Button */}
           <button
             type="button"
-            onClick={loginWithGoogle}
+            onClick={handleGoogleLogin}
             className="w-full py-3 px-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 font-bold text-xs sm:text-sm shadow-subtle-sm transition-all flex items-center justify-center gap-2.5 active:scale-98"
           >
             <svg className="w-4 h-4 shrink-0" viewBox="0 0 24 24">
@@ -125,7 +132,7 @@ export function AuthModal() {
               <input
                 type="text"
                 required
-                placeholder={role === "GROOM" ? "Contoh: Muhammad Heru" : "Contoh: Nurul Fathonah"}
+                placeholder="Masukkan nama lengkap Anda"
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
@@ -140,7 +147,7 @@ export function AuthModal() {
                 <input
                   type="text"
                   required
-                  placeholder={role === "GROOM" ? "Contoh: Heru" : "Contoh: Nurul"}
+                  placeholder="Nama panggilan"
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
                   className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"

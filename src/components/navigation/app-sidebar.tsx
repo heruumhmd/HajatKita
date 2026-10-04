@@ -62,10 +62,50 @@ export function AppSidebar({
   const pathname = usePathname();
   const { wedding, currentUser } = useWedding();
 
-  const groomNameShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "Heru";
-  const brideNameShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "Nurul";
-  const groomInitial = wedding.groomName ? wedding.groomName.trim()[0].toUpperCase() : "H";
-  const brideInitial = wedding.brideName ? wedding.brideName.trim()[0].toUpperCase() : "N";
+  const effectivePartner = React.useMemo(() => {
+    if (!wedding.isPartnerConnected) return null;
+    const raw = wedding.partnerInfo;
+    const myEmail = (currentUser?.email || "").toLowerCase().trim();
+    const myName = (currentUser?.name || "").toLowerCase().trim();
+    const rawEmail = (raw?.email || "").toLowerCase().trim();
+    const rawName = (raw?.name || "").toLowerCase().trim();
+
+    const isSelf =
+      (rawEmail && myEmail && rawEmail === myEmail) ||
+      (rawName && myName && rawName === myName) ||
+      (currentUser?.role && raw?.role && currentUser.role === raw.role);
+
+    if (!raw || isSelf) {
+      if (currentUser?.role === "GROOM") {
+        return {
+          name: wedding.brideName || "Calon Istri",
+          role: "BRIDE" as const,
+          email: wedding.primaryUserEmail || "",
+          avatarCardId: "duck-bride",
+        };
+      } else {
+        return {
+          name: wedding.groomName || "Calon Suami",
+          role: "GROOM" as const,
+          email: wedding.partnerUserEmail || "",
+          avatarCardId: "penguin-groom",
+        };
+      }
+    }
+
+    return raw;
+  }, [wedding.isPartnerConnected, wedding.partnerInfo, wedding.groomName, wedding.brideName, wedding.primaryUserEmail, wedding.partnerUserEmail, currentUser]);
+
+  const groomNameShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "";
+  const brideNameShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "";
+  const coupleDisplay =
+    groomNameShort && brideNameShort
+      ? `${groomNameShort} & ${brideNameShort}`
+      : groomNameShort
+      ? `Suami: ${groomNameShort}`
+      : brideNameShort
+      ? `Istri: ${brideNameShort}`
+      : "Calon Pengantin";
 
   return (
     <>
@@ -114,6 +154,10 @@ export function AppSidebar({
           {navItems.map((item) => {
             const isActive = pathname === item.href;
             const Icon = item.icon;
+            const isAccountLink = item.href === "/account";
+            const effectiveBadge = isAccountLink
+              ? (wedding.isPartnerConnected ? "Terhubung" : undefined)
+              : item.badge;
 
             return (
               <Link
@@ -134,15 +178,17 @@ export function AppSidebar({
                   />
                   <span>{item.label}</span>
                 </div>
-                {item.badge && (
+                {effectiveBadge && (
                   <span
                     className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold uppercase tracking-wider ${
                       isActive
                         ? "bg-white/20 text-white"
+                        : isAccountLink && wedding.isPartnerConnected
+                        ? "bg-emerald-100 text-emerald-800 border border-emerald-200"
                         : "bg-amber-100 text-amber-800"
                     }`}
                   >
-                    {item.badge}
+                    {effectiveBadge}
                   </span>
                 )}
               </Link>
@@ -150,22 +196,8 @@ export function AppSidebar({
           })}
         </nav>
 
-        {/* Tutorial Button & Duo Status in Footer */}
-        <div className="p-4 border-t border-slate-100 space-y-3 bg-[#FAF7F2]/50">
-          {onOpenTutorial && (
-            <button
-              type="button"
-              onClick={() => {
-                onClose();
-                onOpenTutorial();
-              }}
-              className="w-full py-2 px-3 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-200/80 text-xs font-bold transition-all flex items-center justify-center gap-2"
-            >
-              <HelpCircle className="w-4 h-4 text-amber-700" />
-              <span>Panduan Fitur Halaman Ini</span>
-            </button>
-          )}
-
+        {/* Duo Status in Footer */}
+        <div className="p-4 border-t border-slate-100 bg-[#FAF7F2]/50">
           {/* Dynamic Duo Status with Cute Cards */}
           <div className="p-3 bg-white border border-slate-200/80 rounded-2xl shadow-2xs">
             <div className="flex items-center justify-between mb-2">
@@ -180,15 +212,26 @@ export function AppSidebar({
             <div className="flex items-center gap-2.5">
               <div className="flex -space-x-1.5 shrink-0">
                 <CuteAvatarBadge cardId={currentUser?.avatarCardId || "cat-prince"} size="xs" />
-                <CuteAvatarBadge cardId={wedding.partnerInfo?.avatarCardId || "cat-princess"} size="xs" />
+                <CuteAvatarBadge cardId={effectivePartner?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince")} size="xs" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-bold text-slate-800 truncate font-serif">
-                  {groomNameShort} &amp; {brideNameShort}
-                </p>
-                <p className="text-[10px] text-slate-400 truncate">
-                  {wedding.isPartnerConnected ? "Terhubung Bersama" : "Belum Tersinkron"}
-                </p>
+                <div className="flex items-center gap-1">
+                  <p className="text-xs font-bold text-slate-800 truncate font-serif">
+                    {coupleDisplay}
+                  </p>
+                  {wedding.isPartnerConnected && (
+                    <Heart className="w-3 h-3 text-rose-500 fill-rose-500 shrink-0" />
+                  )}
+                </div>
+                {wedding.isPartnerConnected ? (
+                  <p className="text-[10px] font-bold text-emerald-600 truncate mt-0.5">
+                    Saling Terhubung
+                  </p>
+                ) : (
+                  <p className="text-[10px] text-slate-400 truncate mt-0.5">
+                    Belum Tersinkron
+                  </p>
+                )}
               </div>
             </div>
           </div>

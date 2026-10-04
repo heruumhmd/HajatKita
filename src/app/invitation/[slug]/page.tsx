@@ -16,6 +16,7 @@ import {
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import confetti from "canvas-confetti";
+import { showSuccessAlert } from "@/lib/swal";
 
 export default function DynamicInvitationPage() {
   const params = useParams();
@@ -91,6 +92,10 @@ export default function DynamicInvitationPage() {
     }
 
     setSubmitted(true);
+    showSuccessAlert(
+      "Konfirmasi Kehadiran Terkirim!",
+      `Terima kasih ${guestName}, konfirmasi dan doa restu Anda telah berhasil tersimpan.`
+    );
   };
 
   // Format date readable

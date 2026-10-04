@@ -4,6 +4,7 @@ import React from "react";
 import { CheckSquare, Check, ArrowRight, User, Plus } from "lucide-react";
 import Link from "next/link";
 import { useWedding } from "@/context/wedding-context";
+import { showToastSuccess, showToastInfo } from "@/lib/swal";
 
 export function QuickChecklist() {
   const { checklist, toggleChecklist, requireAuth } = useWedding();
@@ -59,6 +60,11 @@ export function QuickChecklist() {
                 onClick={() => {
                   if (!requireAuth()) return;
                   toggleChecklist(item.id);
+                  if (!isDone) {
+                    showToastSuccess(`Tugas selesai: "${item.title}"! 🎉`);
+                  } else {
+                    showToastInfo(`Status tugas dikembalikan: "${item.title}"`);
+                  }
                 }}
                 className={`flex items-start gap-3 p-3.5 rounded-2xl border transition-all cursor-pointer ${
                   isDone

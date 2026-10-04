@@ -16,6 +16,7 @@ import {
 import { useWedding } from "@/context/wedding-context";
 import { formatRupiah } from "@/lib/utils";
 import confetti from "canvas-confetti";
+import { showToastSuccess } from "@/lib/swal";
 
 export default function DynamicRegistryPage() {
   const params = useParams();
@@ -41,6 +42,7 @@ export default function DynamicRegistryPage() {
     } catch (e) {
       console.log(e);
     }
+    showToastSuccess(`Terima kasih! Kado berhasil diklaim atas nama ${friendName} 🎁`);
     setClaimingId(null);
     setFriendName("");
   };

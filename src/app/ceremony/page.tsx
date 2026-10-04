@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { Gem, Utensils, Users, AlertTriangle, ShieldCheck, Heart, Sparkles, Edit2, Check } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
+import { showToastSuccess } from "@/lib/swal";
 
 export default function CeremonyPage() {
   const { wedding, updateWedding, requireAuth } = useWedding();
@@ -36,6 +37,7 @@ export default function CeremonyPage() {
       penghulu,
       saksiNikah: saksi,
     });
+    showToastSuccess("Detail sakral akad nikah berhasil disimpan! 💍");
     setIsEditingCeremony(false);
   };
 

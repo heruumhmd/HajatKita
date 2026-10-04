@@ -20,6 +20,7 @@ import {
 import { useWedding } from "@/context/wedding-context";
 import { GuestItem, GuestSide, RSVPStatus } from "@/types";
 import { formatRupiah } from "@/lib/utils";
+import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
 
 function GuestsContent() {
   const searchParams = useSearchParams();
@@ -133,6 +134,7 @@ function GuestsContent() {
         pax,
         rsvpStatus,
       });
+      showToastSuccess(`Data tamu "${name}" berhasil diperbarui! ✨`);
     } else {
       addGuest({
         name,
@@ -142,8 +144,22 @@ function GuestsContent() {
         pax,
         rsvpStatus,
       });
+      showToastSuccess(`Tamu "${name}" berhasil ditambahkan! 👥`);
     }
     setIsAddModalOpen(false);
+  };
+
+  const handleDeleteGuest = async (guest: GuestItem) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Tamu Undangan?",
+      text: `Apakah Anda yakin ingin menghapus data undangan "${guest.name}"?`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deleteGuest(guest.id);
+    showToastSuccess(`Tamu "${guest.name}" berhasil dihapus`);
   };
 
   const handleSaveEnvelope = (e: React.FormEvent) => {
@@ -151,14 +167,16 @@ function GuestsContent() {
     if (!recordingEnvelopeId) return;
     const amount = parseFloat(envelopeInput) || 0;
     recordEnvelope(recordingEnvelopeId, amount, giftInput);
+    showToastSuccess("Catatan amplop & kado berhasil disimpan! 💌");
     setRecordingEnvelopeId(null);
     setEnvelopeInput("");
     setGiftInput("");
   };
 
   const generateWhatsAppMessage = (guest: GuestItem) => {
+    showToastInfo(`Membuka WhatsApp untuk mengirim undangan ke ${guest.name}... 💬`);
     const origin = typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
-    const inviteUrl = `${origin}/invitation/${wedding.slug || "heru-nurul"}`;
+    const inviteUrl = `${origin}/invitation/${wedding.slug || "undangan-kami"}`;
 
     const formattedDate = wedding.weddingDate
       ? new Date(wedding.weddingDate).toLocaleDateString("id-ID", {
@@ -169,12 +187,13 @@ function GuestsContent() {
         })
       : "Segera Diumumkan";
 
-    const groomFullName = wedding.groomName || "Muhammad Heru";
-    const brideFullName = wedding.brideName || "Nurul Fathonah";
-    const groomNick = wedding.groomName ? wedding.groomName.split(" ")[0] : "Heru";
-    const brideNick = wedding.brideName ? wedding.brideName.split(" ")[0] : "Nurul";
+    const groomFullName = wedding.groomName || "Mempelai Pria";
+    const brideFullName = wedding.brideName || "Mempelai Wanita";
+    const closingSignature = wedding.groomName && wedding.brideName
+      ? `${wedding.groomName.split(" ")[0]} & ${wedding.brideName.split(" ")[0]}`
+      : "Kedua Mempelai";
 
-    const text = `Assalamu'alaikum Wr. Wb. / Salam Sejahtera\n\nKepada Yth. *${guest.name}*,\n\nDengan penuh rasa syukur, kami mengundang Bapak/Ibu/Sahabat untuk hadir dan memberikan doa restu pada pernikahan kami:\n\n*${groomFullName} & ${brideFullName}*\n${formattedDate}\n${wedding.venueName || "Lokasi Akad/Resepsi"}\n\nDetail undangan digital & konfirmasi kehadiran (RSVP):\n${inviteUrl}\n\nMerupakan suatu kehormatan dan kebahagiaan bagi kami apabila berkenan hadir.\n\nTerima kasih,\n${groomNick} & ${brideNick}`;
+    const text = `Assalamu'alaikum Wr. Wb. / Salam Sejahtera\n\nKepada Yth. *${guest.name}*,\n\nDengan penuh rasa syukur, kami mengundang Bapak/Ibu/Sahabat untuk hadir dan memberikan doa restu pada pernikahan kami:\n\n*${groomFullName} & ${brideFullName}*\n${formattedDate}\n${wedding.venueName || "Lokasi Akad/Resepsi"}\n\nDetail undangan digital & konfirmasi kehadiran (RSVP):\n${inviteUrl}\n\nMerupakan suatu kehormatan dan kebahagiaan bagi kami apabila berkenan hadir.\n\nTerima kasih,\n${closingSignature}`;
 
     const cleanPhone = guest.phone.replace(/[^0-9]/g, "");
     const waUrl = cleanPhone.startsWith("0")
@@ -268,12 +287,12 @@ function GuestsContent() {
             <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-subtle-sm">
               <span className="text-xs text-slate-500 font-semibold block">Tautan Undangan Digital</span>
               <a
-                href={`/invitation/${wedding.slug || "heru-nurul"}`}
+                href={`/invitation/${wedding.slug || "undangan-kami"}`}
                 target="_blank"
                 rel="noreferrer"
                 className="text-xs font-bold text-pastel-700 hover:underline flex items-center gap-1 mt-2"
               >
-                <span>Buka /invitation/{wedding.slug || "heru-nurul"}</span>
+                <span>Buka /invitation/{wedding.slug || "undangan-kami"}</span>
                 <ExternalLink className="w-3.5 h-3.5" />
               </a>
               <span className="text-[10px] text-slate-400 block mt-1">Dapat diakses langsung oleh tamu</span>
@@ -391,10 +410,7 @@ function GuestsContent() {
 
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!requireAuth()) return;
-                        deleteGuest(guest.id);
-                      }}
+                      onClick={() => handleDeleteGuest(guest)}
                       className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
                       title="Hapus Tamu"
                     >

@@ -34,15 +34,52 @@ export async function GET(req: NextRequest) {
         SELECT * FROM weddings 
         WHERE LOWER(primary_user_email) = ${email} 
            OR LOWER(partner_user_email) = ${email}
+           OR LOWER(partner_email) = ${email}
         ORDER BY updated_at DESC LIMIT 1
       `;
       if (rows && rows.length > 0) {
         weddingRow = rows[0];
+      } else {
+        // Fallback: Check couple_history for active connection
+        const historyRows = await sql`
+          SELECT * FROM couple_history
+          WHERE (LOWER(user1_email) = ${email} OR LOWER(user2_email) = ${email})
+            AND status = 'ACTIVE'
+          ORDER BY updated_at DESC LIMIT 1
+        `;
+        if (historyRows && historyRows.length > 0) {
+          const wRows = await sql`
+            SELECT * FROM weddings WHERE id = ${historyRows[0].wedding_id}::uuid LIMIT 1
+          `;
+          if (wRows && wRows.length > 0) {
+            weddingRow = wRows[0];
+          }
+        }
+      }
+    }
+
+    // Retrieve user's own profile from users table if email is present
+    let userProfile = null;
+    if (email) {
+      const uRows = await sql`SELECT * FROM users WHERE LOWER(email) = ${email} LIMIT 1`;
+      if (uRows && uRows.length > 0) {
+        const u = uRows[0];
+        userProfile = {
+          id: u.id,
+          name: u.name,
+          nickname: u.nickname || u.name?.split(" ")[0] || "Saya",
+          email: u.email,
+          image: u.image || undefined,
+          avatarCardId: u.avatar_card_id || "cat-prince",
+          role: u.role || "GROOM",
+          phone: u.phone || "",
+          bio: u.bio || "",
+        };
       }
     }
 
     if (!weddingRow) {
-      return NextResponse.json({ success: true, exists: false, data: null });
+      return NextResponse.json({ success: true, exists: false, data: null, user: userProfile });
     }
 
     let parsedPlanData = null;
@@ -54,11 +91,79 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // Check couple_history for active couple on this wedding
+    const coupleHistoryRows = await sql`
+      SELECT * FROM couple_history
+      WHERE wedding_id = ${weddingRow.id}::uuid AND status = 'ACTIVE'
+      ORDER BY updated_at DESC LIMIT 1
+    `;
+    const isCoupleActiveInHistory = coupleHistoryRows && coupleHistoryRows.length > 0;
+    const historyRecord = isCoupleActiveInHistory ? coupleHistoryRows[0] : null;
+
+    const isConnected = Boolean(weddingRow.is_partner_connected || isCoupleActiveInHistory);
+
+    const user1Email = (weddingRow.primary_user_email || historyRecord?.user1_email || "").toLowerCase().trim();
+    const user2Email = (weddingRow.partner_user_email || weddingRow.partner_email || historyRecord?.user2_email || "").toLowerCase().trim();
+
+    // Fetch both users from users table for precise profile details
+    let user1Row = null;
+    let user2Row = null;
+    if (user1Email) {
+      const r1 = await sql`SELECT * FROM users WHERE LOWER(email) = ${user1Email} LIMIT 1`;
+      if (r1 && r1.length > 0) user1Row = r1[0];
+    }
+    if (user2Email) {
+      const r2 = await sql`SELECT * FROM users WHERE LOWER(email) = ${user2Email} LIMIT 1`;
+      if (r2 && r2.length > 0) user2Row = r2[0];
+    }
+
+    const cleanReqEmail = (email || "").toLowerCase().trim();
+    const isRequesterUser2 = cleanReqEmail && cleanReqEmail === user2Email;
+    const isRequesterUser1 = cleanReqEmail && cleanReqEmail === user1Email;
+
+    // Build reciprocal profiles for User 1 and User 2
+    const u1Role = user1Row?.role || (weddingRow.partner_role === "GROOM" ? "BRIDE" : "GROOM");
+    const u1Name = user1Row?.name || (u1Role === "GROOM" ? weddingRow.groom_name : weddingRow.bride_name) || (u1Role === "GROOM" ? "Calon Suami" : "Calon Istri");
+    const user1Info = {
+      name: u1Name,
+      role: u1Role as "GROOM" | "BRIDE",
+      email: user1Email,
+      avatarCardId: user1Row?.avatar_card_id || (u1Role === "GROOM" ? "penguin-groom" : "duck-bride"),
+    };
+
+    const u2Role = user2Row?.role || weddingRow.partner_role || (u1Role === "GROOM" ? "BRIDE" : "GROOM");
+    const u2Name = user2Row?.name || weddingRow.partner_name || (u2Role === "GROOM" ? weddingRow.groom_name : weddingRow.bride_name) || (u2Role === "GROOM" ? "Calon Suami" : "Calon Istri");
+    const user2Info = {
+      name: u2Name,
+      role: u2Role as "GROOM" | "BRIDE",
+      email: user2Email,
+      avatarCardId: user2Row?.avatar_card_id || (u2Role === "GROOM" ? "penguin-groom" : "duck-bride"),
+    };
+
+    let partnerInfo = undefined;
+    if (isConnected) {
+      if (isRequesterUser2) {
+        // User is partner (User 2) -> Partner is User 1
+        partnerInfo = user1Info;
+      } else if (isRequesterUser1) {
+        // User is owner (User 1) -> Partner is User 2
+        partnerInfo = user2Info;
+      } else {
+        partnerInfo = user2Info;
+      }
+    }
+
+    // Auto-resolve groom and bride names from users if wedding row is missing them
+    const effectiveGroom = weddingRow.groom_name ||
+      (user1Info.role === "GROOM" ? user1Info.name : (user2Info.role === "GROOM" ? user2Info.name : ""));
+    const effectiveBride = weddingRow.bride_name ||
+      (user1Info.role === "BRIDE" ? user1Info.name : (user2Info.role === "BRIDE" ? user2Info.name : ""));
+
     const wedding = {
       id: weddingRow.id,
       title: weddingRow.title || "Pernikahan Kita",
-      groomName: weddingRow.groom_name || "",
-      brideName: weddingRow.bride_name || "",
+      groomName: effectiveGroom,
+      brideName: effectiveBride,
       weddingDate: weddingRow.wedding_date || "",
       city: weddingRow.city || "",
       targetBudget: parseFloat(weddingRow.target_budget || "0"),
@@ -71,12 +176,13 @@ export async function GET(req: NextRequest) {
       waliNikah: weddingRow.wali_nikah || "",
       penghulu: weddingRow.penghulu || "",
       saksiNikah: weddingRow.saksi_nikah || "",
-      isPartnerConnected: Boolean(weddingRow.is_partner_connected),
-      partnerInfo: weddingRow.partner_email ? {
-        name: weddingRow.partner_name || "Pasangan",
-        role: weddingRow.partner_role || "BRIDE",
-        email: weddingRow.partner_email || "",
-        avatarCardId: weddingRow.partner_avatar_card_id || "cat-princess",
+      isPartnerConnected: isConnected,
+      primaryUserEmail: user1Email,
+      partnerUserEmail: user2Email,
+      partnerInfo,
+      couple: isConnected ? {
+        user1: user1Info,
+        user2: user2Info,
       } : undefined,
     };
 
@@ -84,6 +190,7 @@ export async function GET(req: NextRequest) {
       success: true,
       exists: true,
       wedding,
+      user: userProfile,
       planData: parsedPlanData,
     });
   } catch (error: any) {
@@ -163,26 +270,44 @@ export async function POST(req: NextRequest) {
 
     const inviteCode = (wedding?.inviteCode || "HAJAT-" + Math.random().toString(36).substring(2, 8).toUpperCase()).toUpperCase();
 
-    // 3. Check if wedding exists by id, primary_user_email, or invite_code
+    // 3. Check if wedding exists by id, primary_user_email, partner email, or invite_code
     let existingWedding = null;
     if (wedding?.id && wedding.id.length > 10 && wedding.id !== "w-main") {
-      const rows = await sql`SELECT id FROM weddings WHERE id = ${wedding.id}::uuid LIMIT 1`;
+      const rows = await sql`SELECT * FROM weddings WHERE id = ${wedding.id}::uuid LIMIT 1`;
       if (rows && rows.length > 0) existingWedding = rows[0];
     }
 
     if (!existingWedding && userEmail) {
       const rows = await sql`
-        SELECT id FROM weddings 
+        SELECT * FROM weddings 
         WHERE LOWER(primary_user_email) = ${userEmail} 
            OR LOWER(partner_user_email) = ${userEmail}
+           OR LOWER(partner_email) = ${userEmail}
         ORDER BY updated_at DESC LIMIT 1
       `;
-      if (rows && rows.length > 0) existingWedding = rows[0];
+      if (rows && rows.length > 0) {
+        existingWedding = rows[0];
+      } else {
+        const historyRows = await sql`
+          SELECT * FROM couple_history
+          WHERE (LOWER(user1_email) = ${userEmail} OR LOWER(user2_email) = ${userEmail})
+            AND status = 'ACTIVE'
+          ORDER BY updated_at DESC LIMIT 1
+        `;
+        if (historyRows && historyRows.length > 0) {
+          const wRows = await sql`
+            SELECT * FROM weddings WHERE id = ${historyRows[0].wedding_id}::uuid LIMIT 1
+          `;
+          if (wRows && wRows.length > 0) {
+            existingWedding = wRows[0];
+          }
+        }
+      }
     }
 
     if (!existingWedding && inviteCode) {
       const rows = await sql`
-        SELECT id FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
+        SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
       `;
       if (rows && rows.length > 0) existingWedding = rows[0];
     }
@@ -191,27 +316,73 @@ export async function POST(req: NextRequest) {
 
     if (existingWedding) {
       savedWeddingId = existingWedding.id;
+
+      // CRITICAL SAFEGUARD: Preserve connected partner state from DB and couple_history!
+      // An out-of-date client state must NOT disconnect an active partner.
+      const coupleHistoryRows = await sql`
+        SELECT * FROM couple_history
+        WHERE wedding_id = ${existingWedding.id}::uuid AND status = 'ACTIVE'
+        ORDER BY updated_at DESC LIMIT 1
+      `;
+      const isCoupleActiveInHistory = coupleHistoryRows && coupleHistoryRows.length > 0;
+      const historyRec = isCoupleActiveInHistory ? coupleHistoryRows[0] : null;
+
+      const isPartnerConnected = existingWedding.is_partner_connected || isCoupleActiveInHistory || Boolean(wedding?.isPartnerConnected);
+      const partnerEmail = isPartnerConnected
+        ? (existingWedding.partner_email || existingWedding.partner_user_email || historyRec?.user2_email || wedding?.partnerInfo?.email || null)
+        : null;
+      const partnerUserEmail = partnerEmail;
+
+      let resolvedPartnerName = isPartnerConnected
+        ? (existingWedding.partner_name || wedding?.partnerInfo?.name || null)
+        : null;
+      let resolvedPartnerRole = isPartnerConnected
+        ? (existingWedding.partner_role || wedding?.partnerInfo?.role || null)
+        : null;
+      let resolvedPartnerAvatar = isPartnerConnected
+        ? (existingWedding.partner_avatar_card_id || wedding?.partnerInfo?.avatarCardId || null)
+        : null;
+
+      if (isPartnerConnected && partnerEmail && (!resolvedPartnerName || !resolvedPartnerRole || !resolvedPartnerAvatar)) {
+        const uRows = await sql`SELECT * FROM users WHERE LOWER(email) = ${partnerEmail.toLowerCase().trim()} LIMIT 1`;
+        if (uRows && uRows.length > 0) {
+          resolvedPartnerName = resolvedPartnerName || uRows[0].name;
+          resolvedPartnerRole = resolvedPartnerRole || uRows[0].role;
+          resolvedPartnerAvatar = resolvedPartnerAvatar || uRows[0].avatar_card_id;
+        }
+      }
+
+      if (isPartnerConnected) {
+        resolvedPartnerRole = resolvedPartnerRole || (existingWedding.partner_role || (existingWedding.groom_name ? "GROOM" : "BRIDE"));
+        resolvedPartnerName = resolvedPartnerName || (resolvedPartnerRole === "GROOM" ? (existingWedding.groom_name || "Muhammad Heru") : (existingWedding.bride_name || "Nurul Fathonah"));
+        resolvedPartnerAvatar = resolvedPartnerAvatar || (resolvedPartnerRole === "GROOM" ? "penguin-groom" : "duck-bride");
+      }
+
+      const primaryEmail = existingWedding.primary_user_email || historyRec?.user1_email || (userEmail && userEmail !== partnerEmail ? userEmail : null);
+
       await sql`
         UPDATE weddings SET
-          title = ${wedding.title || "Pernikahan Kita"},
-          groom_name = ${wedding.groomName || ""},
-          bride_name = ${wedding.brideName || ""},
-          wedding_date = ${wedding.weddingDate || ""},
-          city = ${wedding.city || ""},
-          target_budget = ${wedding.targetBudget || 0},
-          current_savings = ${wedding.currentSavings || 0},
-          slug = ${wedding.slug || ""},
-          venue_name = ${wedding.venueName || ""},
-          venue_address = ${wedding.venueAddress || ""},
-          mahar_details = ${wedding.maharDetails || ""},
-          wali_nikah = ${wedding.waliNikah || ""},
-          penghulu = ${wedding.penghulu || ""},
-          saksi_nikah = ${wedding.saksiNikah || ""},
-          is_partner_connected = ${Boolean(wedding.isPartnerConnected)},
-          partner_name = ${wedding.partnerInfo?.name || null},
-          partner_email = ${wedding.partnerInfo?.email || null},
-          partner_role = ${wedding.partnerInfo?.role || null},
-          partner_avatar_card_id = ${wedding.partnerInfo?.avatarCardId || null},
+          title = ${wedding?.title || existingWedding.title || "Pernikahan Kita"},
+          groom_name = COALESCE(NULLIF(${wedding?.groomName || ""}, ''), groom_name),
+          bride_name = COALESCE(NULLIF(${wedding?.brideName || ""}, ''), bride_name),
+          wedding_date = COALESCE(NULLIF(${wedding?.weddingDate || ""}, ''), wedding_date),
+          city = COALESCE(NULLIF(${wedding?.city || ""}, ''), city),
+          target_budget = ${wedding?.targetBudget !== undefined ? wedding.targetBudget : existingWedding.target_budget},
+          current_savings = ${wedding?.currentSavings !== undefined ? wedding.currentSavings : existingWedding.current_savings},
+          slug = COALESCE(NULLIF(${wedding?.slug || ""}, ''), slug),
+          venue_name = COALESCE(NULLIF(${wedding?.venueName || ""}, ''), venue_name),
+          venue_address = COALESCE(NULLIF(${wedding?.venueAddress || ""}, ''), venue_address),
+          mahar_details = COALESCE(NULLIF(${wedding?.maharDetails || ""}, ''), mahar_details),
+          wali_nikah = COALESCE(NULLIF(${wedding?.waliNikah || ""}, ''), wali_nikah),
+          penghulu = COALESCE(NULLIF(${wedding?.penghulu || ""}, ''), penghulu),
+          saksi_nikah = COALESCE(NULLIF(${wedding?.saksiNikah || ""}, ''), saksi_nikah),
+          is_partner_connected = ${Boolean(isPartnerConnected)},
+          partner_name = ${resolvedPartnerName},
+          partner_email = ${partnerEmail},
+          partner_user_email = ${partnerUserEmail},
+          partner_role = ${resolvedPartnerRole},
+          partner_avatar_card_id = ${resolvedPartnerAvatar},
+          primary_user_email = COALESCE(${primaryEmail}, primary_user_email),
           plan_data = ${planDataJson},
           updated_at = NOW()
         WHERE id = ${savedWeddingId}::uuid
@@ -222,7 +393,7 @@ export async function POST(req: NextRequest) {
           title, invite_code, groom_name, bride_name, wedding_date, city,
           target_budget, current_savings, slug, venue_name, venue_address,
           mahar_details, wali_nikah, penghulu, saksi_nikah,
-          is_partner_connected, partner_name, partner_email, partner_role,
+          is_partner_connected, partner_name, partner_email, partner_user_email, partner_role,
           partner_avatar_card_id, primary_user_email, plan_data, updated_at
         ) VALUES (
           ${wedding?.title || "Pernikahan Kita"},
@@ -242,6 +413,7 @@ export async function POST(req: NextRequest) {
           ${wedding?.saksiNikah || ""},
           ${Boolean(wedding?.isPartnerConnected)},
           ${wedding?.partnerInfo?.name || null},
+          ${wedding?.partnerInfo?.email || null},
           ${wedding?.partnerInfo?.email || null},
           ${wedding?.partnerInfo?.role || null},
           ${wedding?.partnerInfo?.avatarCardId || null},

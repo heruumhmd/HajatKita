@@ -9,7 +9,7 @@ export default function InvitationIndexPage() {
   const { wedding } = useWedding();
 
   useEffect(() => {
-    const slug = wedding.slug || "heru-nurul";
+    const slug = wedding.slug || "undangan-kami";
     router.replace(`/invitation/${slug}`);
   }, [wedding.slug, router]);
 

@@ -17,6 +17,7 @@ import { FinancialGuardBanner } from "@/components/dashboard/financial-guard-ban
 import { formatRupiah } from "@/lib/utils";
 import { useWedding } from "@/context/wedding-context";
 import { BudgetCategory } from "@/types";
+import { showToastSuccess, showConfirmDialog } from "@/lib/swal";
 
 export default function BudgetPage() {
   const {
@@ -87,6 +88,7 @@ export default function BudgetPage() {
         spent: spentNum,
         status: computedStatus,
       });
+      showToastSuccess(`Pos anggaran "${name}" berhasil diperbarui! 💳`);
     } else {
       addBudgetCategory({
         name,
@@ -95,9 +97,23 @@ export default function BudgetPage() {
         spent: spentNum,
         status: computedStatus,
       });
+      showToastSuccess(`Pos anggaran "${name}" berhasil ditambahkan! 📊`);
     }
 
     setIsModalOpen(false);
+  };
+
+  const handleDeleteCategory = async (cat: BudgetCategory) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Pos Anggaran?",
+      text: `Apakah Anda yakin ingin menghapus pos anggaran "${cat.name}"? Data pengeluaran pos ini akan dihapus.`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deleteBudgetCategory(cat.id);
+    showToastSuccess(`Pos anggaran "${cat.name}" berhasil dihapus`);
   };
 
   return (
@@ -234,10 +250,7 @@ export default function BudgetPage() {
                           </button>
                           <button
                             type="button"
-                            onClick={() => {
-                              if (!requireAuth()) return;
-                              deleteBudgetCategory(cat.id);
-                            }}
+                            onClick={() => handleDeleteCategory(cat)}
                             className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
                             title="Hapus Pos Anggaran"
                           >

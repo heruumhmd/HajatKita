@@ -4,6 +4,7 @@ import React, { useState } from "react";
 import { GitFork, Clock, User, Phone, MapPin, Printer, Plus, Trash2, Edit2 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { RundownItem } from "@/types";
+import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
 
 export default function RundownPage() {
   const { rundown, addRundown, editRundown, deleteRundown, wedding, requireAuth } = useWedding();
@@ -66,6 +67,7 @@ export default function RundownPage() {
         location: location || "Venue Utama",
         phase,
       });
+      showToastSuccess(`Agenda "${activity}" berhasil diperbarui! ⏱️`);
     } else {
       addRundown({
         startTime,
@@ -76,12 +78,27 @@ export default function RundownPage() {
         location: location || "Venue Utama",
         phase,
       });
+      showToastSuccess(`Agenda "${activity}" berhasil ditambahkan! ⏱️`);
     }
 
     setIsModalOpen(false);
   };
 
+  const handleDeleteRundown = async (item: RundownItem) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Agenda Rundown?",
+      text: `Apakah Anda yakin ingin menghapus agenda "${item.activity}" (${item.startTime} - ${item.endTime})?`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deleteRundown(item.id);
+    showToastSuccess(`Agenda "${item.activity}" berhasil dihapus`);
+  };
+
   const handlePrint = () => {
+    showToastInfo("Mempersiapkan pratinjau cetak rundown / PDF... 🖨️");
     window.print();
   };
 
@@ -199,10 +216,7 @@ export default function RundownPage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!requireAuth()) return;
-                      deleteRundown(item.id);
-                    }}
+                    onClick={() => handleDeleteRundown(item)}
                     className="p-1 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
                     title="Hapus Agenda"
                   >

@@ -26,28 +26,36 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isPublicRoute =
     pathname.startsWith("/invitation/") || pathname.startsWith("/registry/");
 
-  // Auto-open spotlight tour on first visit if not seen
+  // Auto-open spotlight tour once per page at initial visit, never repeatedly
   useEffect(() => {
-    if (!isPublicRoute) {
+    if (!isPublicRoute && pathname) {
       try {
-        const seen = localStorage.getItem("HAJAT_SPOTLIGHT_TOUR_SEEN");
-        if (!seen) {
+        const pageKey = `HAJAT_TOUR_SEEN_${pathname}`;
+        const hasSeenPageTour = localStorage.getItem(pageKey);
+        if (!hasSeenPageTour) {
           setIsTourOpen(true);
+          localStorage.setItem(pageKey, "true");
         }
       } catch (e) {
         console.error(e);
       }
     }
-  }, [isPublicRoute, setIsTourOpen]);
+  }, [isPublicRoute, pathname, setIsTourOpen]);
 
   if (isPublicRoute) {
     return <>{children}</>;
   }
 
-  const groomShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "Heru";
-  const brideShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "Nurul";
+  const groomShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "";
+  const brideShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "";
   const coupleTitle =
-    wedding.groomName && wedding.brideName ? `${groomShort} & ${brideShort}` : "Heru & Nurul";
+    groomShort && brideShort
+      ? `${groomShort} & ${brideShort}`
+      : groomShort
+      ? `Hajat ${groomShort}`
+      : brideShort
+      ? `Hajat ${brideShort}`
+      : "Rencana Pernikahan Kita";
 
   return (
     <div className="min-h-screen bg-[#FBFBFA] text-slate-900 flex flex-col">
@@ -55,7 +63,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
       <AppSidebar
         isMobileOpen={isMobileSidebarOpen}
         onClose={() => setIsMobileSidebarOpen(false)}
-        onOpenTutorial={() => setIsTourOpen(true)}
         onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
       />
 
@@ -88,7 +95,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
           {/* Right: Tutorial & Profile/Login */}
           <div className="flex items-center gap-2 shrink-0">
-            {/* Spotlight Tour Trigger */}
+            {/* Spotlight Tour Trigger (Top Nav only) */}
             <button
               type="button"
               onClick={() => setIsTourOpen(true)}
@@ -127,20 +134,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Not Logged In Warning Callout */}
         {!isLoggedIn && (
-          <div className="bg-amber-50/90 border-b border-amber-200/80 px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
-            <div className="flex items-center gap-2">
-              <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
-              <span>
-                Mode Tamu: Masuk dengan Google atau akun agar seluruh data pernikahan tersimpan permanen.
-              </span>
-            </div>
-            <button
-              type="button"
-              onClick={() => setIsAuthModalOpen(true)}
-              className="text-amber-950 font-bold underline hover:text-amber-700 whitespace-nowrap self-start sm:self-center"
-            >
-              Masuk Sekarang
-            </button>
+          <div className="bg-amber-50/90 border-b border-amber-200/80 px-4 py-2 flex items-center gap-2 text-xs text-amber-900">
+            <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+            <span>
+              Mode Tamu: Masuk dengan Google atau akun Anda agar seluruh data pernikahan tersimpan permanen di database.
+            </span>
           </div>
         )}
 

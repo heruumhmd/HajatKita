@@ -18,6 +18,7 @@ import {
 import { useWedding } from "@/context/wedding-context";
 import { SeserahanItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
+import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
 
 export default function SeserahanPage() {
   const {
@@ -44,14 +45,14 @@ export default function SeserahanPage() {
   const [newNotes, setNewNotes] = useState("");
 
   const boxNames: Record<number, string> = {
-    1: "Box 1: Perlengkapan Ibadah",
-    2: "Box 2: Skincare & Body Care",
-    3: "Box 3: Tas & Sepatu",
-    4: "Box 4: Busana & Pakaian",
-    5: "Box 5: Perhiasan & Logam Mulia",
-    6: "Box 6: Makanan Khas Tradisional",
-    7: "Box 7: Perlengkapan Mandi",
-    8: "Box 8: Hobi & Aksesoris Khusus",
+    1: "Kotak 1: Perlengkapan Ibadah",
+    2: "Kotak 2: Skincare & Body Care",
+    3: "Kotak 3: Tas & Sepatu",
+    4: "Kotak 4: Busana & Pakaian",
+    5: "Kotak 5: Perhiasan & Logam Mulia",
+    6: "Kotak 6: Makanan Khas Tradisional",
+    7: "Kotak 7: Perlengkapan Mandi",
+    8: "Kotak 8: Hobi & Aksesoris Khusus",
   };
 
   const handleOpenAdd = () => {
@@ -90,7 +91,7 @@ export default function SeserahanPage() {
       editSeserahan({
         ...editingItem,
         boxNumber: newBoxNumber,
-        boxName: boxNames[newBoxNumber] || `Box ${newBoxNumber}`,
+        boxName: boxNames[newBoxNumber] || `Kotak ${newBoxNumber}`,
         name: newItemName,
         brand: newBrand || "Custom",
         category: newCategory,
@@ -98,10 +99,11 @@ export default function SeserahanPage() {
         purchaseUrl: newUrl || "https://shopee.co.id",
         notes: newNotes,
       });
+      showToastSuccess(`Barang "${newItemName}" berhasil diperbarui! 🎁`);
     } else {
       addSeserahan({
         boxNumber: newBoxNumber,
-        boxName: boxNames[newBoxNumber] || `Box ${newBoxNumber}`,
+        boxName: boxNames[newBoxNumber] || `Kotak ${newBoxNumber}`,
         name: newItemName,
         brand: newBrand || "Custom",
         category: newCategory,
@@ -110,9 +112,34 @@ export default function SeserahanPage() {
         isPurchased: false,
         notes: newNotes,
       });
+      showToastSuccess(`Barang "${newItemName}" berhasil ditambahkan ke ${boxNames[newBoxNumber] || 'kotak seserahan'}! 🎁`);
     }
 
     setIsModalOpen(false);
+  };
+
+  const handleToggleSeserahan = (item: SeserahanItem) => {
+    if (!requireAuth()) return;
+    toggleSeserahan(item.id);
+    const willBePurchased = !item.isPurchased;
+    if (willBePurchased) {
+      showToastSuccess(`"${item.name}" ditandai sudah terbeli! 🛍️`);
+    } else {
+      showToastInfo(`Status "${item.name}" diubah ke belum terbeli`);
+    }
+  };
+
+  const handleDeleteSeserahan = async (item: SeserahanItem) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Barang Seserahan?",
+      text: `Apakah Anda yakin ingin menghapus barang "${item.name}" dari ${item.boxName}?`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deleteSeserahan(item.id);
+    showToastSuccess(`"${item.name}" berhasil dihapus dari seserahan`);
   };
 
   const filteredItems = seserahan.filter((item) => {
@@ -143,7 +170,7 @@ export default function SeserahanPage() {
               Katalog Kotak Seserahan &amp; Hantaran
             </h1>
             <p className="text-xs sm:text-sm text-slate-600">
-              Rincian barang hantaran per box, estimasi anggaran, dan checklist belanja
+              Rincian barang hantaran per kotak, estimasi anggaran, dan checklist belanja
             </p>
           </div>
         </div>
@@ -186,7 +213,7 @@ export default function SeserahanPage() {
           <span className="text-2xl font-black font-mono text-slate-900 mt-1 block">
             {formatRupiah(totalEstimated)}
           </span>
-          <span className="text-[11px] text-slate-400">Total anggaran seluruh box</span>
+          <span className="text-[11px] text-slate-400">Total anggaran seluruh kotak hantaran</span>
         </div>
 
         <div className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-subtle-sm">
@@ -213,7 +240,7 @@ export default function SeserahanPage() {
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
             }`}
           >
-            Semua Box ({seserahan.length})
+            Semua Kotak ({seserahan.length})
           </button>
           {[1, 2, 3, 4, 5, 6, 7, 8].map((boxNum) => {
             const count = seserahan.filter((i) => i.boxNumber === boxNum).length;
@@ -228,7 +255,7 @@ export default function SeserahanPage() {
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
                 }`}
               >
-                Box {boxNum} ({count})
+                Kotak {boxNum} ({count})
               </button>
             );
           })}
@@ -254,7 +281,7 @@ export default function SeserahanPage() {
             <Package className="w-10 h-10 text-slate-300 mx-auto" />
             <h3 className="font-bold text-slate-800 text-sm">Belum Ada Barang Seserahan</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto">
-              Mulai susun daftar barang hantaran seperti mukena, skincare, sepatu, atau perhiasan per box.
+              Mulai susun daftar barang hantaran seperti mukena, skincare, sepatu, atau perhiasan per kotak hantaran.
             </p>
             <button
               type="button"
@@ -279,7 +306,7 @@ export default function SeserahanPage() {
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-[10px] font-bold uppercase tracking-wider text-pastel-800 bg-pastel-50 px-2 py-0.5 rounded-md border border-pastel-200">
-                    {item.boxName}
+                    {item.boxName.replace(/Box/gi, "Kotak")}
                   </span>
                   <span
                     className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-full ${
@@ -329,10 +356,7 @@ export default function SeserahanPage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!requireAuth()) return;
-                      toggleSeserahan(item.id);
-                    }}
+                    onClick={() => handleToggleSeserahan(item)}
                     className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs ${
                       item.isPurchased
                         ? "bg-emerald-600 text-white"
@@ -360,10 +384,7 @@ export default function SeserahanPage() {
 
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!requireAuth()) return;
-                      deleteSeserahan(item.id);
-                    }}
+                    onClick={() => handleDeleteSeserahan(item)}
                     className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
                     title="Hapus Barang"
                   >
@@ -412,7 +433,7 @@ export default function SeserahanPage() {
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Pilih Kotak (Box) *
+                    Pilih Kotak Hantaran *
                   </label>
                   <select
                     value={newBoxNumber}
@@ -421,7 +442,7 @@ export default function SeserahanPage() {
                   >
                     {[1, 2, 3, 4, 5, 6, 7, 8].map((num) => (
                       <option key={num} value={num}>
-                        Box {num} ({boxNames[num]?.split(": ")[1] || `Kotak ${num}`})
+                        Kotak {num} ({boxNames[num]?.split(": ")[1] || `Kotak ${num}`})
                       </option>
                     ))}
                   </select>

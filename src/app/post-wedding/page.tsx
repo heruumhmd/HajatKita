@@ -17,15 +17,18 @@ import {
   Check,
   Trash2,
   Copy,
+  Edit2,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { PostWeddingItem, ItemPriority } from "@/types";
 import { formatRupiah } from "@/lib/utils";
+import { showToastSuccess, showToastInfo, showConfirmDialog, showPromptDialog } from "@/lib/swal";
 
 export default function PostWeddingPage() {
   const {
     postWedding,
     addPostWedding,
+    editPostWedding,
     togglePostWedding,
     claimPostWedding,
     deletePostWedding,
@@ -36,6 +39,7 @@ export default function PostWeddingPage() {
   const [selectedRoom, setSelectedRoom] = useState<string>("ALL");
   const [selectedPriority, setSelectedPriority] = useState<string>("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<PostWeddingItem | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
 
   // Form State
@@ -46,34 +50,103 @@ export default function PostWeddingPage() {
   const [purchaseUrl, setPurchaseUrl] = useState("");
   const [priority, setPriority] = useState<ItemPriority>("MUST_HAVE");
 
-  const handleClaim = (id: string) => {
+  const handleClaim = async (item: PostWeddingItem) => {
     if (!requireAuth()) return;
-    const friendName = prompt("Masukkan nama rekan / keluarga yang menghadiahkan barang ini:");
+    const friendName = await showPromptDialog({
+      title: "Klaim Kado Pernikahan",
+      text: `Masukkan nama rekan / keluarga yang menghadiahkan "${item.name}":`,
+      inputPlaceholder: "Contoh: Bpk. Hendra & Rekan Kerja",
+      confirmButtonText: "Konfirmasi Hadiahkan",
+    });
     if (!friendName) return;
-    claimPostWedding(id, friendName);
+    claimPostWedding(item.id, friendName);
+    showToastSuccess(`Kado "${item.name}" berhasil diklaim atas nama ${friendName}! 🎁`);
   };
 
-  const handleAddItem = (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    if (!requireAuth()) return;
+    setEditingItem(null);
+    setName("");
+    setBrand("");
+    setRoomCategory("Kamar Tidur");
+    setPrice("");
+    setPurchaseUrl("");
+    setPriority("MUST_HAVE");
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: PostWeddingItem) => {
+    if (!requireAuth()) return;
+    setEditingItem(item);
+    setName(item.name);
+    setBrand(item.brand);
+    setRoomCategory(item.roomCategory);
+    setPrice(item.price.toString());
+    setPurchaseUrl(item.purchaseUrl || "");
+    setPriority(item.priority);
+    setIsModalOpen(true);
+  };
+
+  const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
     const priceNum = parseFloat(price) || 0;
-    addPostWedding({
-      name,
-      roomCategory,
-      brand: brand || "Generic",
-      price: priceNum,
-      purchaseUrl: purchaseUrl || "https://tokopedia.com",
-      priority,
-      isAcquired: false,
-      isGiftClaimable: true,
-    });
+    if (editingItem) {
+      editPostWedding({
+        ...editingItem,
+        name,
+        roomCategory,
+        brand: brand || "Generic",
+        price: priceNum,
+        purchaseUrl: purchaseUrl || "https://tokopedia.com",
+        priority,
+      });
+      showToastSuccess(`Wishlist "${name}" berhasil diperbarui! 🏠`);
+    } else {
+      addPostWedding({
+        name,
+        roomCategory,
+        brand: brand || "Generic",
+        price: priceNum,
+        purchaseUrl: purchaseUrl || "https://tokopedia.com",
+        priority,
+        isAcquired: false,
+        isGiftClaimable: true,
+      });
+      showToastSuccess(`Wishlist "${name}" berhasil ditambahkan! 🏠`);
+    }
 
     setIsModalOpen(false);
+    setEditingItem(null);
     setName("");
     setBrand("");
     setPrice("");
     setPurchaseUrl("");
+  };
+
+  const handleTogglePostWedding = (item: PostWeddingItem) => {
+    if (!requireAuth()) return;
+    togglePostWedding(item.id);
+    const willBeAcquired = !item.isAcquired;
+    if (willBeAcquired) {
+      showToastSuccess(`"${item.name}" ditandai sudah terpenuhi! 🎉`);
+    } else {
+      showToastInfo(`Status "${item.name}" diubah ke belum terpenuhi`);
+    }
+  };
+
+  const handleDeletePostWedding = async (item: PostWeddingItem) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Kebutuhan Rumah?",
+      text: `Apakah Anda yakin ingin menghapus "${item.name}" dari daftar kebutuhan pasca-nikah?`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deletePostWedding(item.id);
+    showToastSuccess(`"${item.name}" berhasil dihapus dari daftar`);
   };
 
   const filteredItems = postWedding.filter((item) => {
@@ -94,6 +167,7 @@ export default function PostWeddingPage() {
       const url = `${origin}/registry/${wedding.slug || "kami-berdua"}`;
       navigator.clipboard.writeText(url);
       setCopiedLink(true);
+      showToastSuccess("Tautan wishlist kado berhasil disalin! 🎁");
       setTimeout(() => setCopiedLink(false), 2500);
     }
   };
@@ -129,10 +203,7 @@ export default function PostWeddingPage() {
           <button
             id="tour-postwedding-add"
             type="button"
-            onClick={() => {
-              if (!requireAuth()) return;
-              setIsModalOpen(true);
-            }}
+            onClick={handleOpenAdd}
             className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
@@ -164,12 +235,12 @@ export default function PostWeddingPage() {
         <div id="tour-postwedding-registry" className="bg-white p-5 rounded-3xl border border-slate-200/90 shadow-subtle-sm">
           <span className="text-xs text-slate-500 font-semibold block">Tautan Registry Publik</span>
           <a
-            href={`/registry/${wedding.slug || "heru-nurul"}`}
+            href={`/registry/${wedding.slug || "registry-kami"}`}
             target="_blank"
             rel="noreferrer"
             className="text-xs font-bold text-pastel-700 hover:underline flex items-center gap-1 mt-2"
           >
-            <span>Buka /registry/{wedding.slug || "heru-nurul"}</span>
+            <span>Buka /registry/{wedding.slug || "registry-kami"}</span>
             <ExternalLink className="w-3.5 h-3.5" />
           </a>
           <span className="text-[10px] text-slate-400 block mt-1">Dapat diklaim oleh rekan kerja &amp; kerabat</span>
@@ -217,10 +288,7 @@ export default function PostWeddingPage() {
           </p>
           <button
             type="button"
-            onClick={() => {
-              if (!requireAuth()) return;
-              setIsModalOpen(true);
-            }}
+            onClick={handleOpenAdd}
             className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs"
           >
             <Plus className="w-3.5 h-3.5" />
@@ -277,10 +345,7 @@ export default function PostWeddingPage() {
                 <div className="flex items-center gap-1.5">
                   <button
                     type="button"
-                    onClick={() => {
-                      if (!requireAuth()) return;
-                      togglePostWedding(item.id);
-                    }}
+                    onClick={() => handleTogglePostWedding(item)}
                     className={`inline-flex items-center gap-1 px-3 py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs ${
                       item.isAcquired
                         ? "bg-emerald-600 text-white"
@@ -300,7 +365,7 @@ export default function PostWeddingPage() {
                   {!item.isAcquired && (
                     <button
                       type="button"
-                      onClick={() => handleClaim(item.id)}
+                      onClick={() => handleClaim(item)}
                       className="inline-flex items-center gap-1 px-3 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 text-xs font-bold"
                     >
                       <Gift className="w-3 h-3 text-amber-600" />
@@ -309,30 +374,37 @@ export default function PostWeddingPage() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!requireAuth()) return;
-                    deletePostWedding(item.id);
-                  }}
-                  className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
-                  title="Hapus"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(item)}
+                    className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
+                    title="Edit Barang"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeletePostWedding(item)}
+                    className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                    title="Hapus"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
         </div>
       )}
 
-      {/* Add Modal */}
+      {/* Add / Edit Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base font-serif">
-                Tambah Kebutuhan Rumah Pasca-Nikah
+                {editingItem ? "Edit Kebutuhan Pasca-Nikah" : "Tambah Kebutuhan Rumah Pasca-Nikah"}
               </h3>
               <button
                 type="button"
@@ -343,7 +415,7 @@ export default function PostWeddingPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddItem} className="space-y-3.5">
+            <form onSubmit={handleSaveItem} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nama Barang *
@@ -446,7 +518,7 @@ export default function PostWeddingPage() {
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
                 >
-                  Tambah Kebutuhan
+                  {editingItem ? "Simpan Perubahan" : "Tambah Kebutuhan"}
                 </button>
               </div>
             </form>

@@ -30,6 +30,7 @@ import {
   Share2,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
+import { showToastSuccess } from "@/lib/swal";
 
 interface TourStep {
   target: string;
@@ -52,7 +53,7 @@ const dashboardTourSteps: TourStep[] = [
     previewContent: (
       <div className="p-3 bg-gradient-to-r from-amber-50 to-pastel-50 rounded-2xl border border-amber-200/80 text-xs space-y-2">
         <div className="flex items-center justify-between font-serif font-black text-slate-800 text-sm">
-          <span>Heru &amp; Nurul</span>
+          <span>Mempelai &amp; Pasangan</span>
           <span className="text-[10px] font-sans font-bold bg-amber-100 text-amber-900 px-2 py-0.5 rounded-full">
             H-75 Hari
           </span>
@@ -132,13 +133,13 @@ const dashboardTourSteps: TourStep[] = [
         <div className="text-[11px] space-y-1 pt-1">
           <div className="flex justify-between text-slate-600">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-pastel-600" /> Tabungan Heru (Suami)
+              <span className="w-2 h-2 rounded-full bg-pastel-600" /> Tabungan Suami
             </span>
             <span className="font-mono font-bold">Rp 46.000.000</span>
           </div>
           <div className="flex justify-between text-slate-600">
             <span className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-pastel-400" /> Tabungan Nurul (Istri)
+              <span className="w-2 h-2 rounded-full bg-pastel-400" /> Tabungan Istri
             </span>
             <span className="font-mono font-bold">Rp 28.500.000</span>
           </div>
@@ -151,7 +152,7 @@ const dashboardTourSteps: TourStep[] = [
     title: "Katalog Seserahan, Wishlist & Tamu",
     subtitle: "3 Modul Esensial untuk Hari Bahagia",
     description:
-      "Tiga kartu ringkasan cepat untuk mengelola: (1) Seserahan per Box dengan link toko online, (2) Wishlist kado rumah pasca-nikah yang bisa diklaim sahabat, dan (3) Manajemen tamu & buku utang kondangan.",
+      "Tiga kartu ringkasan cepat untuk mengelola: (1) Seserahan per Kotak Hantaran dengan link toko online, (2) Wishlist kado rumah pasca-nikah yang bisa diklaim sahabat, dan (3) Manajemen tamu & buku utang kondangan.",
     previewTitle: "Kemampuan Fitur:",
     previewContent: (
       <ul className="text-xs space-y-1.5 text-slate-600">
@@ -161,7 +162,7 @@ const dashboardTourSteps: TourStep[] = [
         </li>
         <li className="flex items-center gap-2">
           <Home className="w-3.5 h-3.5 text-pastel-600 shrink-0" />
-          <span><strong>Wishlist:</strong> Bagikan link <code>/registry/heru-nurul</code> ke teman kantor.</span>
+          <span><strong>Wishlist:</strong> Bagikan link <code>/registry/wishlist-kami</code> ke rekan kantor.</span>
         </li>
         <li className="flex items-center gap-2">
           <Users className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
@@ -259,7 +260,7 @@ const timelineTourSteps: TourStep[] = [
     title: "Tambah Tugas & Delegasi PIC",
     subtitle: "Bagi Tugas Bersama Pasangan",
     description:
-      "Buat tugas baru dan delegasikan penanggung jawabnya ke Heru (Suami), Nurul (Istri), atau Bersama untuk setiap detail persiapan.",
+      "Buat tugas baru dan delegasikan penanggung jawabnya ke Calon Suami, Calon Istri, atau Bersama untuk setiap detail persiapan.",
     previewTitle: "Delegasi Adil:",
     previewContent: (
       <div className="p-3 bg-pastel-50 rounded-2xl border border-pastel-200 text-xs text-pastel-900">
@@ -362,7 +363,7 @@ const guestsTourSteps: TourStep[] = [
     previewTitle: "Format Teks Personal:",
     previewContent: (
       <div className="p-3 bg-pastel-50 rounded-2xl border border-pastel-200 text-xs text-pastel-900">
-        Teks pesan WhatsApp otomatis memuat nama tamu yang bersangkutan dan tautan ke <code>/invitation/heru-nurul</code>.
+        Teks pesan WhatsApp otomatis memuat nama tamu yang bersangkutan dan tautan ke undangan digital personal Anda.
       </div>
     ),
   },
@@ -461,7 +462,7 @@ const postWeddingTourSteps: TourStep[] = [
     title: "Tautan Registry Publik Teman & Kerabat",
     subtitle: "Cegah Kado Dobel dari Sahabat & Rekan Kantor",
     description:
-      "Bagikan tautan publik <code>/registry/heru-nurul</code> ke grup kantor dan sahabat. Mereka dapat memilih dan mengklaim kado mana yang ingin dihadiahkan.",
+      "Bagikan tautan publik wishlist kado Anda ke grup kantor dan sahabat. Mereka dapat memilih dan mengklaim kado mana yang ingin dihadiahkan.",
     previewTitle: "Sistem Klaim Kado Mandiri:",
     previewContent: (
       <div className="p-3 bg-white rounded-2xl border border-slate-200 text-xs text-slate-600">
@@ -607,7 +608,7 @@ const accountTourSteps: TourStep[] = [
     title: "Identitas Mempelai & Acara",
     subtitle: "Lengkapi Nama, Tanggal & Slug Tautan",
     description:
-      "Atur nama lengkap Muhammad Heru & Nurul Fathonah, tanggal sakral pernikahan, venue acara, dan slug URL publik untuk undangan digital Anda.",
+      "Atur nama lengkap kedua mempelai, tanggal sakral pernikahan, venue acara, dan slug URL publik untuk undangan digital Anda.",
     previewTitle: "Pusat Data Pernikahan:",
     previewContent: (
       <div className="p-3 bg-white rounded-2xl border border-slate-200 text-xs text-slate-600">
@@ -736,10 +737,12 @@ export function SpotlightTour() {
     setIsTourOpen(false);
     setCurrentStepIndex(0);
     try {
+      localStorage.setItem(`HAJAT_TOUR_SEEN_${pathname}`, "true");
       localStorage.setItem(`HAJAT_SPOTLIGHT_TOUR_${pathname}`, "true");
     } catch (e) {
       console.error(e);
     }
+    showToastSuccess("Panduan selesai! Selamat merencanakan pernikahan impian 🎉");
   };
 
   const isFirst = currentStepIndex === 0;

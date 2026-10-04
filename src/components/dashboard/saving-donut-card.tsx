@@ -2,14 +2,16 @@
 
 import React, { useState } from "react";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { Wallet, Plus, TrendingUp, Sparkles, CheckCircle2, Trash2 } from "lucide-react";
+import { Wallet, Plus, TrendingUp, Sparkles, CheckCircle2, Trash2, Edit2 } from "lucide-react";
 import { formatRupiah, formatShortRupiah } from "@/lib/utils";
 import { useWedding } from "@/context/wedding-context";
+import { showToastSuccess, showConfirmDialog } from "@/lib/swal";
 import confetti from "canvas-confetti";
 
 export function SavingDonutCard() {
-  const { wedding, savingContributions, addSavingContribution, deleteSavingContribution, requireAuth } = useWedding();
+  const { wedding, savingContributions, addSavingContribution, editSavingContribution, deleteSavingContribution, requireAuth } = useWedding();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
   const [contributor, setContributor] = useState("Calon Suami");
   const [customLabel, setCustomLabel] = useState("");
@@ -37,39 +39,93 @@ export function SavingDonutCard() {
     },
   ];
 
-  const handleDeposit = (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    if (!requireAuth()) return;
+    setEditingIdx(null);
+    setDepositAmount("");
+    setCustomLabel("");
+    setContributor("Calon Suami");
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (idx: number) => {
+    if (!requireAuth()) return;
+    const item = savingContributions[idx];
+    if (!item) return;
+    setEditingIdx(idx);
+    setDepositAmount(item.amount.toString());
+    setCustomLabel(item.label);
+    if (item.label.includes("Calon Istri") || item.label.includes("Istri")) {
+      setContributor("Calon Istri");
+    } else if (item.label.includes("Keluarga")) {
+      setContributor("Bantuan Keluarga");
+    } else if (item.label.includes("Bersama")) {
+      setContributor("Tabungan Bersama");
+    } else {
+      setContributor("Calon Suami");
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleSaveDeposit = (e: React.FormEvent) => {
     e.preventDefault();
     const amountNum = parseFloat(depositAmount);
     if (!amountNum || amountNum <= 0) return;
 
     const label = customLabel.trim() || `Tabungan ${contributor}`;
-    const color = palette[savingContributions.length % palette.length];
 
-    addSavingContribution({
-      label,
-      amount: amountNum,
-      percentage: 0,
-      color,
-    });
-
-    setIsModalOpen(false);
-    setDepositAmount("");
-    setCustomLabel("");
-
-    // Confetti
-    try {
-      confetti({
-        particleCount: 60,
-        spread: 70,
-        origin: { y: 0.7 },
-        colors: ["#1D50A2", "#C59B3C", "#5D92DC", "#F43F5E"],
+    if (editingIdx !== null) {
+      const existing = savingContributions[editingIdx];
+      editSavingContribution(editingIdx, {
+        label,
+        amount: amountNum,
+        color: existing?.color || palette[editingIdx % palette.length],
       });
-    } catch {
-      // safe
+      setSuccessToast(`Berhasil memperbarui setoran ${formatRupiah(amountNum)}!`);
+      showToastSuccess(`Setoran ${formatRupiah(amountNum)} berhasil diperbarui! 💰`);
+    } else {
+      const color = palette[savingContributions.length % palette.length];
+      addSavingContribution({
+        label,
+        amount: amountNum,
+        percentage: 0,
+        color,
+      });
+
+      // Confetti
+      try {
+        confetti({
+          particleCount: 60,
+          spread: 70,
+          origin: { y: 0.7 },
+          colors: ["#1D50A2", "#C59B3C", "#5D92DC", "#F43F5E"],
+        });
+      } catch {
+        // safe
+      }
+
+      setSuccessToast(`Berhasil menambah setoran ${formatRupiah(amountNum)}!`);
+      showToastSuccess(`Setoran ${formatRupiah(amountNum)} berhasil dicatat! 🎉`);
     }
 
-    setSuccessToast(`Berhasil menambah setoran ${formatRupiah(amountNum)}!`);
+    setIsModalOpen(false);
+    setEditingIdx(null);
+    setDepositAmount("");
+    setCustomLabel("");
     setTimeout(() => setSuccessToast(null), 4000);
+  };
+
+  const handleDeleteDeposit = async (idx: number) => {
+    if (!requireAuth()) return;
+    const item = savingContributions[idx];
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Setoran Tabungan?",
+      text: `Apakah Anda yakin ingin menghapus data setoran "${item?.label || 'Setoran'}" senilai ${formatRupiah(item?.amount || 0)}?`,
+      confirmButtonText: "Ya, Hapus",
+    });
+    if (!isConfirmed) return;
+    deleteSavingContribution(idx);
+    showToastSuccess("Setoran tabungan berhasil dihapus");
   };
 
   return (
@@ -92,10 +148,7 @@ export function SavingDonutCard() {
 
         <button
           type="button"
-          onClick={() => {
-            if (!requireAuth()) return;
-            setIsModalOpen(true);
-          }}
+          onClick={handleOpenAdd}
           className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs transition-all shadow-xs w-full sm:w-auto"
         >
           <Plus className="w-4 h-4" />
@@ -197,16 +250,21 @@ export function SavingDonutCard() {
                     </div>
                   </div>
 
-                  <div className="flex items-center gap-2 shrink-0">
-                    <span className="font-bold font-mono text-slate-800 text-xs sm:text-sm">
+                  <div className="flex items-center gap-1 shrink-0">
+                    <span className="font-bold font-mono text-slate-800 text-xs sm:text-sm mr-1">
                       {formatRupiah(c.amount)}
                     </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (!requireAuth()) return;
-                        deleteSavingContribution(idx);
-                      }}
+                      onClick={() => handleOpenEdit(idx)}
+                      className="text-slate-400 hover:text-pastel-600 transition-colors p-1"
+                      title="Edit setoran"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteDeposit(idx)}
                       className="text-slate-300 hover:text-rose-500 transition-colors p-1"
                       title="Hapus setoran"
                     >
@@ -226,7 +284,7 @@ export function SavingDonutCard() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base font-serif">
-                Catat Setoran Tabungan Bersama
+                {editingIdx !== null ? "Edit Setoran Tabungan" : "Catat Setoran Tabungan Bersama"}
               </h3>
               <button
                 type="button"
@@ -237,7 +295,7 @@ export function SavingDonutCard() {
               </button>
             </div>
 
-            <form onSubmit={handleDeposit} className="space-y-4">
+            <form onSubmit={handleSaveDeposit} className="space-y-4">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Pihak Penyetor
@@ -293,7 +351,7 @@ export function SavingDonutCard() {
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
                 >
-                  Simpan Setoran
+                  {editingIdx !== null ? "Simpan Perubahan" : "Simpan Setoran"}
                 </button>
               </div>
             </form>

@@ -48,12 +48,28 @@ export interface WeddingProject {
   penghulu?: string;
   saksiNikah?: string;
   isPartnerConnected: boolean;
+  primaryUserEmail?: string;
+  partnerUserEmail?: string;
   partnerInfo?: {
     name: string;
     role: RoleType;
     image?: string;
     email: string;
     avatarCardId?: string;
+  };
+  couple?: {
+    user1: {
+      name: string;
+      role: RoleType;
+      email: string;
+      avatarCardId?: string;
+    };
+    user2: {
+      name: string;
+      role: RoleType;
+      email: string;
+      avatarCardId?: string;
+    };
   };
 }
 

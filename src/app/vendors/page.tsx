@@ -13,15 +13,18 @@ import {
   Trash2,
   Phone,
   Check,
+  Edit2,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { formatRupiah } from "@/lib/utils";
 import { VendorMilestone } from "@/types";
+import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
 
 export default function VendorsPage() {
-  const { vendors, addVendor, toggleVendorStage, deleteVendor, requireAuth } = useWedding();
+  const { vendors, addVendor, editVendor, toggleVendorStage, deleteVendor, requireAuth } = useWedding();
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingVendor, setEditingVendor] = useState<VendorMilestone | null>(null);
 
   // Form State
   const [vendorName, setVendorName] = useState("");
@@ -32,61 +35,135 @@ export default function VendorsPage() {
 
   const handleOpenAddVendor = () => {
     if (!requireAuth()) return;
+    setEditingVendor(null);
+    setVendorName("");
+    setServiceType("Gedung / Venue");
+    setTotalContract("");
+    setContactPerson("");
+    setContactPhone("");
     setIsModalOpen(true);
   };
 
-  const handleToggleStage = (vendorId: string, stageIndex: number) => {
+  const handleOpenEditVendor = (vendor: VendorMilestone) => {
     if (!requireAuth()) return;
-    toggleVendorStage(vendorId, stageIndex);
+    setEditingVendor(vendor);
+    setVendorName(vendor.vendorName);
+    setServiceType(vendor.serviceType);
+    setTotalContract(vendor.totalContract.toString());
+    setContactPerson(vendor.contactPerson || "");
+    setContactPhone(vendor.contactPhone || "");
+    setIsModalOpen(true);
   };
 
-  const handleDeleteVendor = (vendorId: string) => {
+  const handleToggleStage = (vendor: VendorMilestone, stageIndex: number) => {
     if (!requireAuth()) return;
-    deleteVendor(vendorId);
+    const stage = vendor.stages[stageIndex];
+    toggleVendorStage(vendor.id, stageIndex);
+    const willBePaid = !stage.isPaid;
+    if (willBePaid) {
+      showToastSuccess(`Termin "${stage.name}" ditandai terbayar! 💰`);
+    } else {
+      showToastInfo(`Status termin "${stage.name}" dikembalikan ke belum bayar`);
+    }
   };
 
-  const handleAddVendor = (e: React.FormEvent) => {
+  const handleDeleteVendor = async (vendor: VendorMilestone) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Kontrak Vendor?",
+      text: `Apakah Anda yakin ingin menghapus data kontrak vendor "${vendor.vendorName}"?`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deleteVendor(vendor.id);
+    showToastSuccess(`Kontrak vendor "${vendor.vendorName}" berhasil dihapus`);
+  };
+
+  const handleSaveVendor = (e: React.FormEvent) => {
     e.preventDefault();
     if (!requireAuth()) return;
     if (!vendorName.trim()) return;
 
     const contractNum = parseFloat(totalContract) || 0;
 
-    // Default safe Indonesian wedding payment milestones
-    const defaultStages = [
-      {
-        name: "DP Booking Tanggal (20%)",
-        percentage: 20,
-        amount: Math.round(contractNum * 0.2),
-        isPaid: false,
-        condition: "Menerima kwitansi & surat lock tanggal resmi",
-      },
-      {
-        name: "Termin 2 / Technical Meeting (40%)",
-        percentage: 40,
-        amount: Math.round(contractNum * 0.4),
-        isPaid: false,
-        condition: "Layout panggung / food testing / fitting disetujui",
-      },
-      {
-        name: "Pelunasan Pasca-Acara H+1 (40%)",
-        percentage: 40,
-        amount: Math.round(contractNum * 0.4),
-        isPaid: false,
-        condition: "Setelah pekerjaan selesai memuaskan di hari H",
-      },
-    ];
+    if (editingVendor) {
+      const updatedStages = editingVendor.stages.map((stage) => ({
+        ...stage,
+        amount: Math.round(contractNum * (stage.percentage / 100)),
+      }));
 
-    addVendor({
-      vendorName,
-      serviceType,
-      totalContract: contractNum,
-      contactPerson,
-      contactPhone,
-      stages: defaultStages,
-    });
+      editVendor({
+        ...editingVendor,
+        vendorName,
+        serviceType,
+        totalContract: contractNum,
+        contactPerson,
+        contactPhone,
+        stages: updatedStages.length > 0 ? updatedStages : [
+          {
+            name: "DP Booking Tanggal (20%)",
+            percentage: 20,
+            amount: Math.round(contractNum * 0.2),
+            isPaid: false,
+            condition: "Menerima kwitansi & surat lock tanggal resmi",
+          },
+          {
+            name: "Termin 2 / Technical Meeting (40%)",
+            percentage: 40,
+            amount: Math.round(contractNum * 0.4),
+            isPaid: false,
+            condition: "Layout panggung / food testing / fitting disetujui",
+          },
+          {
+            name: "Pelunasan Pasca-Acara H+1 (40%)",
+            percentage: 40,
+            amount: Math.round(contractNum * 0.4),
+            isPaid: false,
+            condition: "Setelah pekerjaan selesai memuaskan di hari H",
+          },
+        ],
+      });
+      showToastSuccess(`Kontrak vendor "${vendorName}" berhasil diperbarui! 🤝`);
+    } else {
+      // Default safe Indonesian wedding payment milestones
+      const defaultStages = [
+        {
+          name: "DP Booking Tanggal (20%)",
+          percentage: 20,
+          amount: Math.round(contractNum * 0.2),
+          isPaid: false,
+          condition: "Menerima kwitansi & surat lock tanggal resmi",
+        },
+        {
+          name: "Termin 2 / Technical Meeting (40%)",
+          percentage: 40,
+          amount: Math.round(contractNum * 0.4),
+          isPaid: false,
+          condition: "Layout panggung / food testing / fitting disetujui",
+        },
+        {
+          name: "Pelunasan Pasca-Acara H+1 (40%)",
+          percentage: 40,
+          amount: Math.round(contractNum * 0.4),
+          isPaid: false,
+          condition: "Setelah pekerjaan selesai memuaskan di hari H",
+        },
+      ];
+
+      addVendor({
+        vendorName,
+        serviceType,
+        totalContract: contractNum,
+        contactPerson,
+        contactPhone,
+        stages: defaultStages,
+      });
+      showToastSuccess(`Vendor "${vendorName}" berhasil didaftarkan! 📝`);
+    }
 
     setIsModalOpen(false);
+    setEditingVendor(null);
     setVendorName("");
     setTotalContract("");
     setContactPerson("");
@@ -214,7 +291,15 @@ export default function VendorsPage() {
 
                     <button
                       type="button"
-                      onClick={() => handleDeleteVendor(vm.id)}
+                      onClick={() => handleOpenEditVendor(vm)}
+                      className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors shrink-0"
+                      title="Edit Kontrak"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteVendor(vm)}
                       className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors shrink-0"
                       title="Hapus Kontrak"
                     >
@@ -258,7 +343,7 @@ export default function VendorsPage() {
                       <div className="pt-3 mt-2 border-t border-slate-200/60">
                         <button
                           type="button"
-                          onClick={() => handleToggleStage(vm.id, sIdx)}
+                          onClick={() => handleToggleStage(vm, sIdx)}
                           className={`w-full py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1 ${
                             stage.isPaid
                               ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
@@ -285,13 +370,13 @@ export default function VendorsPage() {
       )}
       </div>
 
-      {/* Add Vendor Modal */}
+      {/* Add / Edit Vendor Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base font-serif">
-                Tambah Kontrak Rekanan Vendor
+                {editingVendor ? "Edit Kontrak Rekanan Vendor" : "Tambah Kontrak Rekanan Vendor"}
               </h3>
               <button
                 type="button"
@@ -302,7 +387,7 @@ export default function VendorsPage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddVendor} className="space-y-3.5">
+            <form onSubmit={handleSaveVendor} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Nama Vendor / Penyedia Jasa *
@@ -397,7 +482,7 @@ export default function VendorsPage() {
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
                 >
-                  Simpan Vendor
+                  {editingVendor ? "Simpan Perubahan" : "Simpan Vendor"}
                 </button>
               </div>
             </form>

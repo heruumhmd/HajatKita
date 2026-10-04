@@ -87,8 +87,11 @@ export async function POST(req: NextRequest) {
           is_partner_connected = TRUE,
           partner_name = COALESCE(${userName}, partner_name),
           partner_email = ${cleanUserEmail},
+          partner_user_email = ${cleanUserEmail},
           partner_role = ${userRole || "BRIDE"},
           partner_avatar_card_id = ${userAvatarCardId || "cat-princess"},
+          groom_name = CASE WHEN ${userRole === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${userName} ELSE groom_name END,
+          bride_name = CASE WHEN ${userRole === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${userName} ELSE bride_name END,
           updated_at = NOW()
         WHERE id = ${activeWeddingId}::uuid
       `;
@@ -111,8 +114,11 @@ export async function POST(req: NextRequest) {
           is_partner_connected = TRUE,
           partner_name = ${userName || "Pasangan"},
           partner_email = ${cleanUserEmail},
+          partner_user_email = ${cleanUserEmail},
           partner_role = ${userRole || (targetWedding.groom_name ? "BRIDE" : "GROOM")},
           partner_avatar_card_id = ${userAvatarCardId || "cat-princess"},
+          groom_name = CASE WHEN ${userRole === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${userName} ELSE groom_name END,
+          bride_name = CASE WHEN ${userRole === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${userName} ELSE bride_name END,
           updated_at = NOW()
         WHERE id = ${activeWeddingId}::uuid
       `;
@@ -131,17 +137,42 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const partnerName = targetOwnerEmail === cleanUserEmail ? finalWedding.partner_name : (finalWedding.groom_name || finalWedding.partner_name || "Pasangan");
+    // Fetch User 1 (owner) and User 2 (joining user) from users table
+    const user1Email = (finalWedding.primary_user_email || targetOwnerEmail || "").toLowerCase().trim();
+    const user2Email = cleanUserEmail;
+
+    let user1Row = null;
+    let user2Row = null;
+    if (user1Email) {
+      const r1 = await sql`SELECT * FROM users WHERE LOWER(email) = ${user1Email} LIMIT 1`;
+      if (r1 && r1.length > 0) user1Row = r1[0];
+    }
+    if (user2Email) {
+      const r2 = await sql`SELECT * FROM users WHERE LOWER(email) = ${user2Email} LIMIT 1`;
+      if (r2 && r2.length > 0) user2Row = r2[0];
+    }
+
+    // Joining user is User 2, so their partner is User 1 (primary owner)
+    const ownerRole = user1Row?.role || (userRole === "BRIDE" ? "GROOM" : "BRIDE");
+    const partnerDisplayName = user1Row?.name || (ownerRole === "GROOM" ? finalWedding.groom_name : finalWedding.bride_name) || "Pasangan Anda";
+    const partnerRoleDisplay = ownerRole;
+    const partnerAvatarDisplay = user1Row?.avatar_card_id || (ownerRole === "GROOM" ? "cat-prince" : "cat-princess");
+    const partnerEmailDisplay = user1Email;
+
+    const effectiveGroom = finalWedding.groom_name ||
+      (user1Row?.role === "GROOM" ? user1Row.name : (userRole === "GROOM" ? (userName || user2Row?.name) : ""));
+    const effectiveBride = finalWedding.bride_name ||
+      (user1Row?.role === "BRIDE" ? user1Row.name : (userRole === "BRIDE" ? (userName || user2Row?.name) : ""));
 
     return NextResponse.json({
       success: true,
-      message: `Selamat! Anda berhasil terhubung dengan ${partnerName}. Workspace pernikahan kini tersinkron!`,
+      message: `Selamat! Anda berhasil terhubung dengan ${partnerDisplayName}. Workspace pernikahan kini tersinkron!`,
       isRestoredFromSamePartner: Boolean(historicalWedding),
       wedding: {
         id: finalWedding.id,
         title: finalWedding.title,
-        groomName: finalWedding.groom_name || "",
-        brideName: finalWedding.bride_name || "",
+        groomName: effectiveGroom,
+        brideName: effectiveBride,
         weddingDate: finalWedding.wedding_date || "",
         city: finalWedding.city || "",
         targetBudget: parseFloat(finalWedding.target_budget || "0"),
@@ -156,10 +187,10 @@ export async function POST(req: NextRequest) {
         saksiNikah: finalWedding.saksi_nikah || "",
         isPartnerConnected: true,
         partnerInfo: {
-          name: finalWedding.partner_name || "Pasangan",
-          role: finalWedding.partner_role || "BRIDE",
-          email: finalWedding.partner_email || "",
-          avatarCardId: finalWedding.partner_avatar_card_id || "cat-princess",
+          name: partnerDisplayName,
+          role: partnerRoleDisplay,
+          email: partnerEmailDisplay,
+          avatarCardId: partnerAvatarDisplay,
         },
       },
       planData: parsedPlanData,

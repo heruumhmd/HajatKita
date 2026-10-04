@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { memo } from "react";
 import { CuteCard, getCuteCard } from "@/lib/cute-cards";
 import { Sparkles, Heart, Check } from "lucide-react";
 
@@ -11,7 +11,7 @@ interface CuteCardItemProps {
   size?: "sm" | "md" | "lg";
 }
 
-export function CuteCardItem({
+export const CuteCardItem = memo(function CuteCardItem({
   card,
   isSelected = false,
   onSelect,
@@ -22,13 +22,13 @@ export function CuteCardItem({
   return (
     <div
       onClick={onSelect}
-      className={`relative cursor-pointer rounded-2xl sm:rounded-3xl border-2 transition-all duration-200 select-none overflow-hidden ${
+      className={`relative cursor-pointer rounded-2xl sm:rounded-3xl border-2 transition-colors select-none overflow-hidden ${
         card.theme.bgGradient
-      } bg-gradient-to-br p-3 sm:p-4 flex flex-col justify-between ${
+      } bg-gradient-to-br p-3 sm:p-3.5 flex flex-col justify-between ${
         isSelected
-          ? `${card.theme.border} ring-2 ring-pastel-400 shadow-md scale-[1.02]`
-          : "border-slate-200/80 hover:border-slate-300 hover:shadow-xs hover:scale-[1.01]"
-      } ${isSm ? "min-h-[140px]" : "min-h-[160px] sm:min-h-[180px]"}`}
+          ? `${card.theme.border} ring-2 ring-pastel-500 shadow-sm`
+          : "border-slate-200/90 hover:border-pastel-300"
+      } ${isSm ? "min-h-[135px]" : "min-h-[155px]"}`}
     >
       {/* Selection Check Badge */}
       {isSelected && (
@@ -45,7 +45,7 @@ export function CuteCardItem({
           >
             {card.roleLabel}
           </span>
-          <span className="text-xl sm:text-2xl filter drop-shadow-xs">{card.emoji}</span>
+          <span className="text-xl sm:text-2xl filter drop-shadow-xs shrink-0">{card.emoji}</span>
         </div>
 
         <h4 className="font-extrabold text-slate-900 text-xs sm:text-sm font-serif leading-tight mt-1">
@@ -64,7 +64,7 @@ export function CuteCardItem({
       </div>
     </div>
   );
-}
+});
 
 // Compact Avatar Badge for Top Navbar & Sidebar
 export function CuteAvatarBadge({

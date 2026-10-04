@@ -11,16 +11,19 @@ import {
   Trash2,
   CheckCircle2,
   Sparkles,
+  Edit2,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { ChecklistItem, TaskCategory } from "@/types";
+import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
 
 export default function TimelinePage() {
-  const { checklist, addChecklist, toggleChecklist, deleteChecklist, wedding, requireAuth } = useWedding();
+  const { checklist, addChecklist, editChecklist, toggleChecklist, deleteChecklist, wedding, requireAuth } = useWedding();
 
   const [selectedTimeline, setSelectedTimeline] = useState<string>("ALL");
   const [filterCategory, setFilterCategory] = useState<string>("ALL");
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingItem, setEditingItem] = useState<ChecklistItem | null>(null);
 
   // Form State
   const [title, setTitle] = useState("");
@@ -40,23 +43,86 @@ export default function TimelinePage() {
     return matchTimeline && matchCat;
   });
 
-  const handleAddTask = (e: React.FormEvent) => {
+  const handleOpenAdd = () => {
+    if (!requireAuth()) return;
+    setEditingItem(null);
+    setTitle("");
+    setDescription("");
+    setCategory("ADMINISTRASI_KUA");
+    setTimelineTag("H-3 Bulan");
+    setAssignedTo("Bersama");
+    setIsOfficialKUA(false);
+    setIsModalOpen(true);
+  };
+
+  const handleOpenEdit = (item: ChecklistItem) => {
+    if (!requireAuth()) return;
+    setEditingItem(item);
+    setTitle(item.title);
+    setDescription(item.description);
+    setCategory(item.category);
+    setTimelineTag(item.timelineTag);
+    setAssignedTo(item.assignedTo);
+    setIsOfficialKUA(Boolean(item.isOfficialKUA));
+    setIsModalOpen(true);
+  };
+
+  const handleSaveTask = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
 
-    addChecklist({
-      title,
-      description,
-      category,
-      timelineTag,
-      status: "TODO",
-      assignedTo,
-      isOfficialKUA,
-    });
+    if (editingItem) {
+      editChecklist({
+        ...editingItem,
+        title,
+        description,
+        category,
+        timelineTag,
+        assignedTo,
+        isOfficialKUA,
+      });
+      showToastSuccess(`Tugas "${title}" berhasil diperbarui! 📝`);
+    } else {
+      addChecklist({
+        title,
+        description,
+        category,
+        timelineTag,
+        status: "TODO",
+        assignedTo,
+        isOfficialKUA,
+      });
+      showToastSuccess(`Tugas "${title}" berhasil ditambahkan! 📝`);
+    }
 
     setIsModalOpen(false);
+    setEditingItem(null);
     setTitle("");
     setDescription("");
+  };
+
+  const handleToggleTask = (item: ChecklistItem) => {
+    if (!requireAuth()) return;
+    toggleChecklist(item.id);
+    const willBeDone = item.status !== "COMPLETED";
+    if (willBeDone) {
+      showToastSuccess(`Tugas selesai: "${item.title}"! 🎉`);
+    } else {
+      showToastInfo(`Status tugas dikembalikan: "${item.title}"`);
+    }
+  };
+
+  const handleDeleteTask = async (item: ChecklistItem) => {
+    if (!requireAuth()) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Hapus Tugas Checklist?",
+      text: `Apakah Anda yakin ingin menghapus tugas "${item.title}"?`,
+      confirmButtonText: "Ya, Hapus",
+      isDestructive: true,
+    });
+    if (!isConfirmed) return;
+    deleteChecklist(item.id);
+    showToastSuccess(`Tugas "${item.title}" berhasil dihapus`);
   };
 
   return (
@@ -98,10 +164,7 @@ export default function TimelinePage() {
           <button
             id="tour-timeline-add"
             type="button"
-            onClick={() => {
-              if (!requireAuth()) return;
-              setIsModalOpen(true);
-            }}
+            onClick={handleOpenAdd}
             className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0 w-full sm:w-auto"
           >
             <Plus className="w-4 h-4" />
@@ -157,10 +220,7 @@ export default function TimelinePage() {
             </p>
             <button
               type="button"
-              onClick={() => {
-                if (!requireAuth()) return;
-                setIsModalOpen(true);
-              }}
+              onClick={handleOpenAdd}
               className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs"
             >
               <Plus className="w-3.5 h-3.5" />
@@ -183,10 +243,7 @@ export default function TimelinePage() {
               >
                 <button
                   type="button"
-                  onClick={() => {
-                    if (!requireAuth()) return;
-                    toggleChecklist(item.id);
-                  }}
+                  onClick={() => handleToggleTask(item)}
                   className={`w-6 h-6 rounded-xl flex items-center justify-center border transition-all shrink-0 mt-0.5 shadow-2xs ${
                     isDone
                       ? "bg-emerald-600 border-emerald-600 text-white"
@@ -227,17 +284,24 @@ export default function TimelinePage() {
                   )}
                 </div>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!requireAuth()) return;
-                    deleteChecklist(item.id);
-                  }}
-                  className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors shrink-0"
-                  title="Hapus Tugas"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => handleOpenEdit(item)}
+                    className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
+                    title="Edit Tugas"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleDeleteTask(item)}
+                    className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                    title="Hapus Tugas"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             );
           })}
@@ -245,13 +309,13 @@ export default function TimelinePage() {
       )}
       </div>
 
-      {/* Add Task Modal */}
+      {/* Add / Edit Task Modal */}
       {isModalOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/40 backdrop-blur-xs">
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base font-serif">
-                Tambah Tugas Checklist Baru
+                {editingItem ? "Edit Tugas Checklist" : "Tambah Tugas Checklist Baru"}
               </h3>
               <button
                 type="button"
@@ -262,7 +326,7 @@ export default function TimelinePage() {
               </button>
             </div>
 
-            <form onSubmit={handleAddTask} className="space-y-3.5">
+            <form onSubmit={handleSaveTask} className="space-y-3.5">
               <div>
                 <label className="block text-xs font-bold text-slate-700 mb-1">
                   Judul Tugas *
@@ -340,11 +404,11 @@ export default function TimelinePage() {
                     className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
                   >
                     <option value="Bersama">Bersama</option>
-                    <option value={`Suami (${wedding.groomName ? wedding.groomName.split(" ")[0] : "Heru"})`}>
-                      Calon Suami ({wedding.groomName ? wedding.groomName.split(" ")[0] : "Heru"})
+                    <option value={wedding.groomName ? `Suami (${wedding.groomName.split(" ")[0]})` : "Calon Suami"}>
+                      {wedding.groomName ? `Calon Suami (${wedding.groomName.split(" ")[0]})` : "Calon Suami"}
                     </option>
-                    <option value={`Istri (${wedding.brideName ? wedding.brideName.split(" ")[0] : "Nurul"})`}>
-                      Calon Istri ({wedding.brideName ? wedding.brideName.split(" ")[0] : "Nurul"})
+                    <option value={wedding.brideName ? `Istri (${wedding.brideName.split(" ")[0]})` : "Calon Istri"}>
+                      {wedding.brideName ? `Calon Istri (${wedding.brideName.split(" ")[0]})` : "Calon Istri"}
                     </option>
                   </select>
                 </div>
@@ -375,7 +439,7 @@ export default function TimelinePage() {
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
                 >
-                  Simpan Tugas
+                  {editingItem ? "Simpan Perubahan" : "Simpan Tugas"}
                 </button>
               </div>
             </form>

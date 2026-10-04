@@ -3,6 +3,7 @@
 import React from "react";
 import { FileCheck2, CheckCircle2, Circle, AlertCircle, Info, ExternalLink, Download } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
+import { showToastSuccess, showToastInfo } from "@/lib/swal";
 
 export default function AdministrationPage() {
   const { adminSteps, toggleAdminRequirement, requireAuth } = useWedding();
@@ -10,6 +11,17 @@ export default function AdministrationPage() {
   const totalReqs = adminSteps.flatMap((s) => s.requirements);
   const doneReqs = totalReqs.filter((r) => r.isDone).length;
   const percentDone = totalReqs.length > 0 ? Math.round((doneReqs / totalReqs.length) * 100) : 0;
+
+  const handleToggleReq = (stepId: string, req: { id: string; title: string; isDone: boolean }) => {
+    if (!requireAuth()) return;
+    toggleAdminRequirement(stepId, req.id);
+    const willBeDone = !req.isDone;
+    if (willBeDone) {
+      showToastSuccess(`Syarat KUA terpenuhi: "${req.title}"! ✅`);
+    } else {
+      showToastInfo(`Status berkas: "${req.title}" dikembalikan`);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -126,10 +138,7 @@ export default function AdministrationPage() {
                 {step.requirements.map((req) => (
                   <div
                     key={req.id}
-                    onClick={() => {
-                      if (!requireAuth()) return;
-                      toggleAdminRequirement(step.id, req.id);
-                    }}
+                    onClick={() => handleToggleReq(step.id, req)}
                     className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
                       req.isDone
                         ? "bg-emerald-50/40 border-emerald-200 text-slate-800"

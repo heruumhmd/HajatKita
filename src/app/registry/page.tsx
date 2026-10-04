@@ -9,7 +9,7 @@ export default function RegistryIndexPage() {
   const { wedding } = useWedding();
 
   useEffect(() => {
-    const slug = wedding.slug || "heru-nurul";
+    const slug = wedding.slug || "registry-kami";
     router.replace(`/registry/${slug}`);
   }, [wedding.slug, router]);
 

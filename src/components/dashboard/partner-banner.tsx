@@ -1,13 +1,14 @@
 "use client";
 
 import React, { useState } from "react";
-import { Copy, Check, Share2, Heart, ShieldCheck, UserX, Sparkles, Link2 } from "lucide-react";
+import { Copy, Check, Share2, Heart, UserX, Link2 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
 import { getCuteCard } from "@/lib/cute-cards";
+import { showToastSuccess, showToastInfo, showConfirmDialog, showSuccessAlert, showErrorAlert } from "@/lib/swal";
 
 export function PartnerBanner() {
-  const { wedding, currentUser, unpairPartner, requireAuth } = useWedding();
+  const { wedding, currentUser, unpairPartner, requireAuth, syncNow } = useWedding();
   const [copiedCode, setCopiedCode] = useState(false);
   const [copiedLink, setCopiedLink] = useState(false);
   const [isUnpairing, setIsUnpairing] = useState(false);
@@ -23,22 +24,28 @@ export function PartnerBanner() {
   };
 
   const copyCodeToClipboard = () => {
+    syncNow();
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(inviteCode);
       setCopiedCode(true);
+      showToastSuccess("Kode pasangan disalin ke clipboard! 📋");
       setTimeout(() => setCopiedCode(false), 2500);
     }
   };
 
   const copyLinkToClipboard = () => {
+    syncNow();
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(getJoinUrl());
       setCopiedLink(true);
+      showToastSuccess("Tautan gabung disalin ke clipboard! 🔗");
       setTimeout(() => setCopiedLink(false), 2500);
     }
   };
 
   const shareWhatsApp = () => {
+    syncNow();
+    showToastInfo("Membuka WhatsApp untuk berbagi tautan... 💬");
     const groomNick = wedding.groomName ? wedding.groomName.split(" ")[0] : "Saya";
     const brideNick = wedding.brideName ? wedding.brideName.split(" ")[0] : "Pasangan";
     const message = encodeURIComponent(
@@ -49,19 +56,63 @@ export function PartnerBanner() {
 
   const handleUnpair = async () => {
     if (!requireAuth()) return;
-    const confirmPrompt = confirm(
-      "Apakah Anda yakin ingin membatalkan hubungan dengan pasangan di workspace ini?\n\nCatatan: Seluruh data bersama Anda TIDAK AKAN HILANG dan tetap tersimpan aman di database. Data akan dipulihkan otomatis jika Anda terhubung kembali dengan orang yang sama."
-    );
-    if (!confirmPrompt) return;
+    const isConfirmed = await showConfirmDialog({
+      title: "Batalkan Hubungan Pasangan?",
+      text: "Seluruh data bersama Anda TIDAK AKAN HILANG dan tetap tersimpan aman di database Neon. Data akan dipulihkan otomatis jika Anda terhubung kembali dengan orang yang sama.",
+      confirmButtonText: "Ya, Batalkan",
+      cancelButtonText: "Kembali",
+      isDestructive: true,
+      icon: "warning",
+    });
+    if (!isConfirmed) return;
 
     setIsUnpairing(true);
     const result = await unpairPartner();
     setIsUnpairing(false);
-    alert(result.message);
+
+    if (result.success) {
+      showSuccessAlert("Berhasil Membatalkan", result.message);
+    } else {
+      showErrorAlert("Gagal", result.message);
+    }
   };
 
+  const effectivePartner = React.useMemo(() => {
+    if (!wedding.isPartnerConnected) return null;
+    const raw = wedding.partnerInfo;
+    const myEmail = (currentUser?.email || "").toLowerCase().trim();
+    const myName = (currentUser?.name || "").toLowerCase().trim();
+    const rawEmail = (raw?.email || "").toLowerCase().trim();
+    const rawName = (raw?.name || "").toLowerCase().trim();
+
+    const isSelf =
+      (rawEmail && myEmail && rawEmail === myEmail) ||
+      (rawName && myName && rawName === myName) ||
+      (currentUser?.role && raw?.role && currentUser.role === raw.role);
+
+    if (!raw || isSelf) {
+      if (currentUser?.role === "GROOM") {
+        return {
+          name: wedding.brideName || "Calon Istri",
+          role: "BRIDE" as const,
+          email: wedding.primaryUserEmail || "",
+          avatarCardId: "duck-bride",
+        };
+      } else {
+        return {
+          name: wedding.groomName || "Calon Suami",
+          role: "GROOM" as const,
+          email: wedding.partnerUserEmail || "",
+          avatarCardId: "penguin-groom",
+        };
+      }
+    }
+
+    return raw;
+  }, [wedding.isPartnerConnected, wedding.partnerInfo, wedding.groomName, wedding.brideName, wedding.primaryUserEmail, wedding.partnerUserEmail, currentUser]);
+
   const userCard = getCuteCard(currentUser?.avatarCardId);
-  const partnerCard = getCuteCard(wedding.partnerInfo?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince"));
+  const partnerCard = getCuteCard(effectivePartner?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince"));
 
   return (
     <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-4">
@@ -74,7 +125,7 @@ export function PartnerBanner() {
               <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
             </div>
             <CuteAvatarBadge
-              cardId={wedding.partnerInfo?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince")}
+              cardId={effectivePartner?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince")}
               size="sm"
             />
           </div>
@@ -85,23 +136,25 @@ export function PartnerBanner() {
                 Ruang Kolaborasi Pasangan
               </h3>
               {wedding.isPartnerConnected ? (
-                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
-                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                  Terhubung &amp; Sinkron Real-time
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-extrabold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                  <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
+                  Saling Terhubung
                 </span>
               ) : (
                 <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
-                  <Sparkles className="w-3 h-3 text-amber-600" />
                   Menunggu Pasangan
                 </span>
               )}
             </div>
 
-            <p className="text-xs text-slate-500 truncate">
-              {wedding.isPartnerConnected && wedding.partnerInfo ? (
-                <span>
-                  Terhubung dengan: <strong className="text-slate-800">{wedding.partnerInfo.name}</strong> ({wedding.partnerInfo.role === "GROOM" ? "Calon Suami" : "Calon Istri"})
-                </span>
+            <div className="text-xs text-slate-500 truncate flex items-center gap-1.5">
+              {wedding.isPartnerConnected && effectivePartner ? (
+                <>
+                  <span className="font-semibold text-slate-700">{currentUser?.name || "Anda"}</span>
+                  <Heart className="w-3 h-3 fill-rose-500 text-rose-500 shrink-0" />
+                  <strong className="text-slate-900 font-bold">{effectivePartner.name}</strong>
+                  <span className="text-emerald-700 font-medium text-[11px]">(Saling Terhubung)</span>
+                </>
               ) : wedding.groomName && wedding.brideName ? (
                 <span>
                   Calon Mempelai: <strong className="text-slate-800">{wedding.groomName}</strong> &amp; <strong className="text-slate-800">{wedding.brideName}</strong>
@@ -109,7 +162,7 @@ export function PartnerBanner() {
               ) : (
                 <span className="italic text-slate-400">Bagikan kode atau link untuk menghubungkan pasangan</span>
               )}
-            </p>
+            </div>
           </div>
         </div>
 
