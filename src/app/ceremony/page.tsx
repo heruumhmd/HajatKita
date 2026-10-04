@@ -1,38 +1,55 @@
 "use client";
 
 import React, { useState } from "react";
-import { Gem, Utensils, Users, AlertTriangle, ShieldCheck, Heart, Sparkles } from "lucide-react";
+import { Gem, Utensils, Users, AlertTriangle, ShieldCheck, Heart, Sparkles, Edit2, Check } from "lucide-react";
+import { useWedding } from "@/context/wedding-context";
 
 export default function CeremonyPage() {
-  const [invitationsCount, setInvitationsCount] = useState(300);
-  const [familyRatio, setFamilyRatio] = useState(40); // 40% keluarga
-  const [friendsRatio, setFriendsRatio] = useState(40); // 40% rekan/sahabat
-  const [outOfTownRatio, setOutOfTownRatio] = useState(20); // 20% luar kota
+  const { wedding, updateWedding, requireAuth } = useWedding();
 
-  // Calculation formula
-  // Tamu keluarga bawa pasangan + anak = 1.8x
-  // Teman kantor = 1.3x
-  // Luar kota = 0.65x
+  // Ceremony Details edit mode
+  const [isEditingCeremony, setIsEditingCeremony] = useState(false);
+  const [mahar, setMahar] = useState(wedding.maharDetails || "");
+  const [wali, setWali] = useState(wedding.waliNikah || "");
+  const [penghulu, setPenghulu] = useState(wedding.penghulu || "");
+  const [saksi, setSaksi] = useState(wedding.saksiNikah || "");
+
+  // Catering buffer algorithm state
+  const [invitationsCount, setInvitationsCount] = useState(300);
+  const [familyRatio, setFamilyRatio] = useState(40);
+  const [friendsRatio, setFriendsRatio] = useState(40);
+  const [outOfTownRatio, setOutOfTownRatio] = useState(20);
+
   const headsFromFamily = Math.round((invitationsCount * (familyRatio / 100)) * 1.8);
   const headsFromFriends = Math.round((invitationsCount * (friendsRatio / 100)) * 1.3);
   const headsFromOutOfTown = Math.round((invitationsCount * (outOfTownRatio / 100)) * 0.65);
   const totalEstimatedHeads = headsFromFamily + headsFromFriends + headsFromOutOfTown;
 
-  // Indonesian Golden Ratios
   const recommendedBuffetPax = totalEstimatedHeads;
-  const recommendedStallPax = totalEstimatedHeads * 4; // 1 orang = 4 porsi gubukan
+  const recommendedStallPax = totalEstimatedHeads * 4;
+
+  const handleSaveCeremony = () => {
+    if (!requireAuth()) return;
+    updateWedding({
+      maharDetails: mahar,
+      waliNikah: wali,
+      penghulu,
+      saksiNikah: saksi,
+    });
+    setIsEditingCeremony(false);
+  };
 
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-pastel-100 via-sky-50 to-white rounded-3xl p-6 border border-sky-200 shadow-pastel-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-amber-50/50 via-white to-pastel-50/50 rounded-3xl p-6 border border-slate-200/90 shadow-subtle-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
-          <div className="w-12 h-12 rounded-2xl bg-pastel-200 flex items-center justify-center text-pastel-700 shadow-xs">
-            <Gem className="w-6 h-6 text-pastel-700" />
+          <div className="w-12 h-12 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shadow-xs">
+            <Gem className="w-6 h-6 text-amber-700" />
           </div>
           <div>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight">
-              Akad, Resepsi & Kalkulator Porsi Katering
+            <h1 className="text-xl sm:text-2xl font-black text-slate-900 font-serif tracking-tight">
+              Akad, Resepsi &amp; Kalkulator Porsi Katering
             </h1>
             <p className="text-xs sm:text-sm text-slate-600">
               Detail sakral ijab qabul dan formula katering anti-ludes jam 12 siang
@@ -42,53 +59,129 @@ export default function CeremonyPage() {
       </div>
 
       {/* 1. Detail Sakral Akad Nikah Card */}
-      <div className="bg-white rounded-3xl p-6 border border-sky-100 shadow-pastel-sm space-y-4">
-        <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-pastel-700">
-          <Heart className="w-5 h-5 fill-pastel-500 text-pastel-500" />
-          <h2 className="text-base sm:text-lg font-extrabold text-slate-800">
-            Detail Sakral Akad Nikah
-          </h2>
+      <div id="tour-ceremony-form" className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-subtle-sm space-y-4">
+        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+          <div className="flex items-center gap-2 text-pastel-700">
+            <Heart className="w-5 h-5 fill-rose-500 text-rose-500" />
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 font-serif">
+              Detail Sakral Akad Nikah
+            </h2>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (!requireAuth()) return;
+              if (isEditingCeremony) {
+                handleSaveCeremony();
+              } else {
+                setIsEditingCeremony(true);
+              }
+            }}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-bold transition-colors"
+          >
+            {isEditingCeremony ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Edit2 className="w-3.5 h-3.5 text-slate-600" />}
+            <span>{isEditingCeremony ? "Simpan Detail" : "Ubah Rincian"}</span>
+          </button>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-pastel-50/70 border border-sky-100">
-            <span className="text-xs text-slate-500 font-medium block mb-1">Mahar / Mas Kawin</span>
-            <p className="text-sm font-extrabold text-slate-800">Logam Mulia Antam 10 Gram</p>
-            <span className="text-[11px] text-pastel-600 font-semibold">+ Uang Tunai Rp 1.912.026</span>
-          </div>
+        {isEditingCeremony ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-slate-50 rounded-2xl border border-slate-200">
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Mahar / Mas Kawin</label>
+              <input
+                type="text"
+                value={mahar}
+                onChange={(e) => setMahar(e.target.value)}
+                placeholder="Contoh: Logam Mulia Antam 10 Gram & Seperangkat Alat Sholat"
+                className="w-full text-xs font-medium bg-white border border-slate-200 rounded-xl px-3 py-2"
+              />
+            </div>
 
-          <div className="p-4 rounded-2xl bg-pastel-50/70 border border-sky-100">
-            <span className="text-xs text-slate-500 font-medium block mb-1">Wali Nikah Sah</span>
-            <p className="text-sm font-extrabold text-slate-800">Bpk. H. Rahmat Sudrajat</p>
-            <span className="text-[11px] text-slate-500">(Ayah Kandung Pengantin Wanita)</span>
-          </div>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Wali Nikah Sah</label>
+              <input
+                type="text"
+                value={wali}
+                onChange={(e) => setWali(e.target.value)}
+                placeholder="Contoh: Bpk. H. Rahmat Sudrajat (Ayah Kandung)"
+                className="w-full text-xs font-medium bg-white border border-slate-200 rounded-xl px-3 py-2"
+              />
+            </div>
 
-          <div className="p-4 rounded-2xl bg-pastel-50/70 border border-sky-100">
-            <span className="text-xs text-slate-500 font-medium block mb-1">Penghulu / Petugas KUA</span>
-            <p className="text-sm font-extrabold text-slate-800">Drs. H. Ahmad Fauzi, M.Ag</p>
-            <span className="text-[11px] text-slate-500">KUA Kecamatan Coblong</span>
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Penghulu / Petugas KUA</label>
+              <input
+                type="text"
+                value={penghulu}
+                onChange={(e) => setPenghulu(e.target.value)}
+                placeholder="Contoh: Drs. H. Ahmad Fauzi (KUA Setempat)"
+                className="w-full text-xs font-medium bg-white border border-slate-200 rounded-xl px-3 py-2"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">Saksi Akad Nikah</label>
+              <input
+                type="text"
+                value={saksi}
+                onChange={(e) => setSaksi(e.target.value)}
+                placeholder="Contoh: Bpk. Ir. Joko & Bpk. Hendra"
+                className="w-full text-xs font-medium bg-white border border-slate-200 rounded-xl px-3 py-2"
+              />
+            </div>
           </div>
-        </div>
+        ) : (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="p-4 rounded-2xl bg-amber-50/50 border border-amber-200/80">
+              <span className="text-[11px] text-slate-500 font-semibold block mb-1">Mahar / Mas Kawin</span>
+              <p className="text-sm font-extrabold text-slate-900">
+                {wedding.maharDetails || mahar || <span className="text-slate-400 font-normal italic">Belum diisi</span>}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <span className="text-[11px] text-slate-500 font-semibold block mb-1">Wali Nikah Sah</span>
+              <p className="text-sm font-extrabold text-slate-900">
+                {wedding.waliNikah || wali || <span className="text-slate-400 font-normal italic">Belum diisi</span>}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <span className="text-[11px] text-slate-500 font-semibold block mb-1">Penghulu / Petugas KUA</span>
+              <p className="text-sm font-extrabold text-slate-900">
+                {wedding.penghulu || penghulu || <span className="text-slate-400 font-normal italic">Belum diisi</span>}
+              </p>
+            </div>
+
+            <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200">
+              <span className="text-[11px] text-slate-500 font-semibold block mb-1">Saksi Akad Nikah</span>
+              <p className="text-sm font-extrabold text-slate-900">
+                {wedding.saksiNikah || saksi || <span className="text-slate-400 font-normal italic">Belum diisi</span>}
+              </p>
+            </div>
+          </div>
+        )}
       </div>
 
-      {/* 2. Indonesian Catering Buffer Algorithm (Killer Feature) */}
-      <div className="bg-white rounded-3xl p-6 border border-sky-100 shadow-pastel-sm space-y-6">
-        <div className="flex items-center gap-2.5">
-          <div className="w-10 h-10 rounded-2xl bg-pastel-100 flex items-center justify-center text-pastel-600">
-            <Utensils className="w-5 h-5 text-pastel-600" />
+      {/* 2. Catering Buffer Calculator */}
+      <div id="tour-ceremony-catering" className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-subtle-sm space-y-6">
+        <div className="flex items-center gap-2.5 pb-2 border-b border-slate-100">
+          <div className="w-10 h-10 rounded-2xl bg-pastel-50 border border-pastel-200 flex items-center justify-center text-pastel-700">
+            <Utensils className="w-5 h-5 text-pastel-700" />
           </div>
           <div>
-            <h2 className="text-base sm:text-lg font-extrabold text-slate-800">
-              Kalkulator Katering Safety-Buffer (Anti Katering Habis)
+            <h2 className="text-base sm:text-lg font-bold text-slate-900 font-serif">
+              Kalkulator Katering Safety-Buffer (Formula Anti Katering Habis)
             </h2>
             <p className="text-xs text-slate-500">
-              Formula khusus Indonesia yang memperhitungkan tamu bawa pasangan (+1), anak, dan supir
+              Formula khusus Indonesia yang memperhitungkan tamu membawa pasangan (+1), anak, dan supir
             </p>
           </div>
         </div>
 
         {/* Input Parameters */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 rounded-3xl bg-slate-50 border border-slate-200">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 p-5 rounded-2xl bg-slate-50 border border-slate-200">
           <div>
             <label className="block text-xs font-bold text-slate-700 mb-2">
               Jumlah Undangan yang Disebar:
@@ -98,59 +191,87 @@ export default function CeremonyPage() {
                 type="number"
                 value={invitationsCount}
                 onChange={(e) => setInvitationsCount(parseInt(e.target.value, 10) || 0)}
-                className="w-32 text-sm font-black bg-white border border-slate-300 rounded-xl px-3 py-2 text-pastel-700 focus:outline-none focus:ring-2 focus:ring-pastel-300"
+                className="w-32 text-lg font-black font-mono bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900"
               />
-              <span className="text-xs text-slate-500">Undangan Fisik / Digital</span>
+              <span className="text-xs text-slate-500">Undangan (Fisik / Digital)</span>
             </div>
-            <p className="text-[11px] text-slate-400 mt-1.5">
-              1 undangan keluarga di Indonesia rata-rata dihadiri 1.8 orang.
+          </div>
+
+          <div className="space-y-3">
+            <span className="block text-xs font-bold text-slate-700">Proporsi Kategori Tamu:</span>
+            <div className="space-y-2 text-xs">
+              <div className="flex justify-between font-semibold">
+                <span className="text-slate-600">Tamu Keluarga (Faktor 1.8x):</span>
+                <span className="font-mono text-slate-900">{familyRatio}% ({headsFromFamily} Orang)</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={familyRatio}
+                onChange={(e) => setFamilyRatio(parseInt(e.target.value, 10))}
+                className="w-full accent-pastel-600"
+              />
+
+              <div className="flex justify-between font-semibold">
+                <span className="text-slate-600">Teman / Rekan Kerja (Faktor 1.3x):</span>
+                <span className="font-mono text-slate-900">{friendsRatio}% ({headsFromFriends} Orang)</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={friendsRatio}
+                onChange={(e) => setFriendsRatio(parseInt(e.target.value, 10))}
+                className="w-full accent-pastel-600"
+              />
+
+              <div className="flex justify-between font-semibold">
+                <span className="text-slate-600">Tamu Luar Kota (Faktor 0.65x):</span>
+                <span className="font-mono text-slate-900">{outOfTownRatio}% ({headsFromOutOfTown} Orang)</span>
+              </div>
+              <input
+                type="range"
+                min="0"
+                max="100"
+                value={outOfTownRatio}
+                onChange={(e) => setOutOfTownRatio(parseInt(e.target.value, 10))}
+                className="w-full accent-pastel-600"
+              />
+            </div>
+          </div>
+        </div>
+
+        {/* Calculation Result Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+          <div className="p-5 rounded-2xl bg-pastel-50 border border-pastel-200">
+            <span className="text-xs font-bold text-pastel-900 block mb-1">Total Estimasi Kepala (Heads)</span>
+            <span className="text-3xl font-black font-mono text-pastel-800">
+              {totalEstimatedHeads} Orang
+            </span>
+            <p className="text-[11px] text-pastel-700 mt-1">
+              Dari {invitationsCount} undangan yang disebar
             </p>
           </div>
 
-          <div className="space-y-2">
-            <span className="text-xs font-bold text-slate-700 block">
-              Estimasi Komposisi Tamu:
+          <div className="p-5 rounded-2xl bg-amber-50 border border-amber-200">
+            <span className="text-xs font-bold text-amber-900 block mb-1">Rekomendasi Menu Prasmanan (Buffet)</span>
+            <span className="text-3xl font-black font-mono text-amber-900">
+              {recommendedBuffetPax} Porsi
             </span>
-            <div className="text-xs text-slate-600 space-y-1">
-              <p>• Tamu Keluarga ({familyRatio}%): Multiplier 1.8x bawa rombongan</p>
-              <p>• Teman Kantor / Sahabat ({friendsRatio}%): Multiplier 1.3x</p>
-              <p>• Tamu Luar Kota ({outOfTownRatio}%): Potensi hadir 65%</p>
-            </div>
-          </div>
-        </div>
-
-        {/* Calculated Results */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div className="p-4 rounded-2xl bg-sky-50 border border-sky-200">
-            <span className="text-xs text-sky-700 font-bold block mb-1">
-              Perkiraan Kepala Tamu Riil
-            </span>
-            <p className="text-2xl font-black text-sky-900">{totalEstimatedHeads} Orang</p>
-            <span className="text-[11px] text-sky-600">Total mulut yang harus dijamu</span>
+            <p className="text-[11px] text-amber-800 mt-1">
+              Rasio 100% dari total estimasi kepala
+            </p>
           </div>
 
-          <div className="p-4 rounded-2xl bg-pastel-100 border border-pastel-300">
-            <span className="text-xs text-pastel-800 font-bold block mb-1">
-              Rekomendasi Porsi Buffet
+          <div className="p-5 rounded-2xl bg-emerald-50 border border-emerald-200">
+            <span className="text-xs font-bold text-emerald-900 block mb-1">Rekomendasi Menu Gubukan (Stall)</span>
+            <span className="text-3xl font-black font-mono text-emerald-900">
+              {recommendedStallPax} Porsi
             </span>
-            <p className="text-2xl font-black text-pastel-900">{recommendedBuffetPax} Porsi</p>
-            <span className="text-[11px] text-pastel-700">Rasio 100% dari perkiraan kepala</span>
-          </div>
-
-          <div className="p-4 rounded-2xl bg-emerald-50 border border-emerald-200">
-            <span className="text-xs text-emerald-800 font-bold block mb-1">
-              Rekomendasi Porsi Gubukan (Stall)
-            </span>
-            <p className="text-2xl font-black text-emerald-900">{recommendedStallPax.toLocaleString("id-ID")} Porsi</p>
-            <span className="text-[11px] text-emerald-700">Rasio emas 1 : 4 (aman s/d selesai)</span>
-          </div>
-        </div>
-
-        {/* Safety Warning */}
-        <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-200 flex items-start gap-3">
-          <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-          <div className="text-xs text-emerald-900 leading-relaxed">
-            <strong>Indikator Katering Aman:</strong> Dengan alokasi <strong>{recommendedBuffetPax} porsi buffet</strong> dan <strong>{recommendedStallPax.toLocaleString("id-ID")} porsi gubukan</strong>, risiko makanan habis sebelum jam 12:30 siang berada pada batas aman <strong>98%</strong>.
+            <p className="text-[11px] text-emerald-800 mt-1">
+              Rasio 1 orang = 4 porsi aneka gubukan
+            </p>
           </div>
         </div>
       </div>

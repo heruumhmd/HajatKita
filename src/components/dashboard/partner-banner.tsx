@@ -1,79 +1,168 @@
 "use client";
 
 import React, { useState } from "react";
-import { Copy, Check, Share2, Heart, ShieldCheck, Sparkles } from "lucide-react";
-import { mockWedding } from "@/lib/mock-data";
+import { Copy, Check, Share2, Heart, ShieldCheck, UserX, Sparkles, Link2 } from "lucide-react";
+import { useWedding } from "@/context/wedding-context";
+import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
+import { getCuteCard } from "@/lib/cute-cards";
 
 export function PartnerBanner() {
-  const [copied, setCopied] = useState(false);
-  const inviteCode = mockWedding.inviteCode;
+  const { wedding, currentUser, unpairPartner, requireAuth } = useWedding();
+  const [copiedCode, setCopiedCode] = useState(false);
+  const [copiedLink, setCopiedLink] = useState(false);
+  const [isUnpairing, setIsUnpairing] = useState(false);
 
-  const copyToClipboard = () => {
+  const inviteCode = wedding.inviteCode || "HAJAT-89X2";
+
+  const getOrigin = () => {
+    return typeof window !== "undefined" ? window.location.origin : "http://localhost:3000";
+  };
+
+  const getJoinUrl = () => {
+    return `${getOrigin()}/account?join=${inviteCode}`;
+  };
+
+  const copyCodeToClipboard = () => {
     if (typeof navigator !== "undefined" && navigator.clipboard) {
       navigator.clipboard.writeText(inviteCode);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2500);
+      setCopiedCode(true);
+      setTimeout(() => setCopiedCode(false), 2500);
+    }
+  };
+
+  const copyLinkToClipboard = () => {
+    if (typeof navigator !== "undefined" && navigator.clipboard) {
+      navigator.clipboard.writeText(getJoinUrl());
+      setCopiedLink(true);
+      setTimeout(() => setCopiedLink(false), 2500);
     }
   };
 
   const shareWhatsApp = () => {
+    const groomNick = wedding.groomName ? wedding.groomName.split(" ")[0] : "Saya";
+    const brideNick = wedding.brideName ? wedding.brideName.split(" ")[0] : "Pasangan";
     const message = encodeURIComponent(
-      `Halo sayang! Yuk gabung ke Wedding Workspace "Hajat Kita" untuk rencana pernikahan kita. Masukkan kode undangan ini: *${inviteCode}* atau buka: https://hajatkita.vercel.app/invite/${inviteCode}`
+      `Halo sayang! Yuk gabung ke Wedding Workspace "Hajat Kita" untuk merencanakan pernikahan kita bersama.\n\nKlik tautan undangan ini untuk langsung terhubung:\n${getJoinUrl()}\n\natau masukkan Kode Pasangan: *${inviteCode}* di menu Akun & Pasangan.\n\nBiar nikah kita makin terarah dan bahagia!`
     );
     window.open(`https://wa.me/?text=${message}`, "_blank");
   };
 
+  const handleUnpair = async () => {
+    if (!requireAuth()) return;
+    const confirmPrompt = confirm(
+      "Apakah Anda yakin ingin membatalkan hubungan dengan pasangan di workspace ini?\n\nCatatan: Seluruh data bersama Anda TIDAK AKAN HILANG dan tetap tersimpan aman di database. Data akan dipulihkan otomatis jika Anda terhubung kembali dengan orang yang sama."
+    );
+    if (!confirmPrompt) return;
+
+    setIsUnpairing(true);
+    const result = await unpairPartner();
+    setIsUnpairing(false);
+    alert(result.message);
+  };
+
+  const userCard = getCuteCard(currentUser?.avatarCardId);
+  const partnerCard = getCuteCard(wedding.partnerInfo?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince"));
+
   return (
-    <div className="bg-white rounded-3xl p-5 sm:p-6 border border-sky-100 shadow-pastel-sm">
+    <div className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-4">
       <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-        {/* Left Side: Connection Status */}
-        <div className="flex items-start sm:items-center gap-3.5">
-          <div className="relative shrink-0">
-            <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-pastel-200 to-sky-300 flex items-center justify-center text-pastel-700 shadow-pastel-sm ring-2 ring-white">
-              <Heart className="w-6 h-6 fill-pastel-500 text-pastel-500" />
+        {/* Left Side: Connection Status with Cute Card Badges */}
+        <div className="flex items-start sm:items-center gap-3 min-w-0">
+          <div className="relative shrink-0 flex items-center -space-x-2">
+            <CuteAvatarBadge cardId={currentUser?.avatarCardId || "cat-prince"} size="sm" />
+            <div className="w-5 h-5 rounded-full bg-rose-50 border border-rose-200 flex items-center justify-center z-10 shadow-2xs">
+              <Heart className="w-3 h-3 fill-rose-500 text-rose-500" />
             </div>
-            <span className="absolute -bottom-1 -right-1 w-4 h-4 bg-emerald-500 border-2 border-white rounded-full flex items-center justify-center" />
+            <CuteAvatarBadge
+              cardId={wedding.partnerInfo?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince")}
+              size="sm"
+            />
           </div>
 
-          <div className="space-y-0.5">
-            <div className="flex items-center gap-2">
-              <h3 className="font-extrabold text-slate-800 text-sm sm:text-base">
-                Status Duo: Pasangan Terhubung
+          <div className="space-y-0.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+              <h3 className="font-extrabold text-slate-800 text-sm sm:text-base font-serif truncate">
+                Ruang Kolaborasi Pasangan
               </h3>
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-                <ShieldCheck className="w-3 h-3" />
-                Sinkron Real-time
-              </span>
+              {wedding.isPartnerConnected ? (
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-emerald-800 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 shrink-0">
+                  <ShieldCheck className="w-3 h-3 text-emerald-600" />
+                  Terhubung &amp; Sinkron Real-time
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1 text-[9px] sm:text-[10px] font-bold text-amber-800 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 shrink-0">
+                  <Sparkles className="w-3 h-3 text-amber-600" />
+                  Menunggu Pasangan
+                </span>
+              )}
             </div>
-            <p className="text-xs text-slate-500">
-              Calon Istri: <strong className="text-slate-700">{mockWedding.brideName}</strong> ({mockWedding.partnerInfo?.email})
+
+            <p className="text-xs text-slate-500 truncate">
+              {wedding.isPartnerConnected && wedding.partnerInfo ? (
+                <span>
+                  Terhubung dengan: <strong className="text-slate-800">{wedding.partnerInfo.name}</strong> ({wedding.partnerInfo.role === "GROOM" ? "Calon Suami" : "Calon Istri"})
+                </span>
+              ) : wedding.groomName && wedding.brideName ? (
+                <span>
+                  Calon Mempelai: <strong className="text-slate-800">{wedding.groomName}</strong> &amp; <strong className="text-slate-800">{wedding.brideName}</strong>
+                </span>
+              ) : (
+                <span className="italic text-slate-400">Bagikan kode atau link untuk menghubungkan pasangan</span>
+              )}
             </p>
           </div>
         </div>
 
-        {/* Right Side: Invite Code & Share Actions */}
-        <div className="flex flex-wrap items-center gap-2.5 pt-2 lg:pt-0 border-t lg:border-t-0 border-slate-100">
-          <div className="flex items-center gap-2 bg-pastel-50 border border-sky-200/80 px-3 py-1.5 rounded-xl">
-            <span className="text-[11px] font-medium text-slate-500">Kode Pasangan:</span>
-            <span className="text-xs font-mono font-bold text-pastel-700">{inviteCode}</span>
+        {/* Right Side: Unique Invite Code & Share Actions */}
+        <div className="flex flex-wrap items-center gap-2 pt-3 lg:pt-0 border-t lg:border-t-0 border-slate-100">
+          {/* Unique Code Badge */}
+          <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-xl shrink-0">
+            <span className="text-[10px] sm:text-[11px] font-medium text-slate-500">Kode:</span>
+            <span className="text-xs font-mono font-black text-pastel-700">{inviteCode}</span>
             <button
               type="button"
-              onClick={copyToClipboard}
+              onClick={copyCodeToClipboard}
               className="p-1 text-slate-400 hover:text-pastel-600 rounded-md transition-colors"
               title="Salin Kode Undangan"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              {copiedCode ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
             </button>
           </div>
 
+          {/* Copy Link Button */}
+          <button
+            type="button"
+            onClick={copyLinkToClipboard}
+            className="inline-flex items-center justify-center gap-1 px-3 py-1.5 rounded-xl bg-white hover:bg-slate-50 text-slate-700 font-bold text-xs border border-slate-200 transition-colors shadow-2xs shrink-0"
+            title="Salin Tautan Gabung Pasangan"
+          >
+            {copiedLink ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Link2 className="w-3.5 h-3.5 text-slate-500" />}
+            <span>{copiedLink ? "Link Tersalin!" : "Salin Link"}</span>
+          </button>
+
+          {/* Share WhatsApp Button */}
           <button
             type="button"
             onClick={shareWhatsApp}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-semibold text-xs border border-emerald-200 transition-colors shadow-xs active:scale-95"
+            className="inline-flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs transition-colors shadow-xs shrink-0"
           >
             <Share2 className="w-3.5 h-3.5" />
             <span>Kirim via WA</span>
           </button>
+
+          {/* Unpair Button if connected */}
+          {wedding.isPartnerConnected && (
+            <button
+              type="button"
+              onClick={handleUnpair}
+              disabled={isUnpairing}
+              className="inline-flex items-center justify-center gap-1 px-2.5 py-1.5 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-bold transition-colors shadow-2xs shrink-0"
+              title="Batalkan hubungan pasangan (data tetap aman tersimpan di database)"
+            >
+              <UserX className="w-3.5 h-3.5 text-rose-500" />
+              <span>{isUnpairing ? "Memproses..." : "Batalkan Hubungan"}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

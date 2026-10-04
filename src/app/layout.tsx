@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import "./globals.css";
-import { AppSidebar } from "@/components/navigation/app-sidebar";
+import { AuthSessionProvider } from "@/components/auth/session-provider";
+import { WeddingProvider } from "@/context/wedding-context";
+import { AppShell } from "@/components/layout/app-shell";
 
 export const metadata: Metadata = {
   title: "Hajat Kita - Biar Nikah Lebih Terarah",
@@ -15,18 +17,12 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="id">
-      <body className="min-h-screen bg-slate-50/50 text-slate-900 antialiased font-sans">
-        <div className="flex min-h-screen">
-          {/* Responsive Sidebar for Desktop / Tablet + Mobile Drawer */}
-          <AppSidebar />
-
-          {/* Main Content Area */}
-          <main className="flex-1 md:pl-72 flex flex-col min-w-0 pb-20 md:pb-10">
-            <div className="max-w-7xl w-full mx-auto p-4 sm:p-6 lg:p-8 space-y-6">
-              {children}
-            </div>
-          </main>
-        </div>
+      <body className="min-h-screen bg-[#FBFBFA] text-slate-900 antialiased font-sans">
+        <AuthSessionProvider>
+          <WeddingProvider>
+            <AppShell>{children}</AppShell>
+          </WeddingProvider>
+        </AuthSessionProvider>
       </body>
     </html>
   );

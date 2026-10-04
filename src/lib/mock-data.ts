@@ -12,54 +12,55 @@ import {
 
 export const mockWedding: WeddingProject = {
   id: "w-1",
-  title: "Pernikahan Dwiki & Sarah",
-  groomName: "Dwiki Ramadhan",
-  brideName: "Sarah Amalia",
+  title: "Pernikahan Heru & Nurul",
+  groomName: "Muhammad Heru",
+  brideName: "Nurul Fathonah",
   weddingDate: "2026-12-19T08:00:00Z",
   city: "Bandung, Jawa Barat",
   targetBudget: 120000000,
   currentSavings: 82500000,
   inviteCode: "HAJAT-89X2",
+  slug: "heru-nurul",
   isPartnerConnected: true,
   partnerInfo: {
-    name: "Sarah Amalia",
+    name: "Nurul Fathonah",
     role: "BRIDE",
-    email: "sarah.amalia@gmail.com",
+    email: "nurul.fathonah@gmail.com",
     image: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?w=150&auto=format&fit=crop&q=80",
   },
 };
 
 export const mockSavingContributions: SavingContribution[] = [
-  { label: "Tabungan Dwiki (Suami)", amount: 46000000, percentage: 55.8, color: "#38BDF8" }, // Pastel Sky 400
-  { label: "Tabungan Sarah (Istri)", amount: 28500000, percentage: 34.5, color: "#7DD3FC" }, // Pastel Sky 300
+  { label: "Tabungan Heru (Suami)", amount: 46000000, percentage: 55.8, color: "#38BDF8" }, // Pastel Sky 400
+  { label: "Tabungan Nurul (Istri)", amount: 28500000, percentage: 34.5, color: "#7DD3FC" }, // Pastel Sky 300
   { label: "Bantuan Hibah Keluarga", amount: 8000000, percentage: 9.7, color: "#BAE6FD" }, // Pastel Sky 200
 ];
 
 export const mockActivityLogs: ActivityLog[] = [
   {
     id: "act-1",
-    userName: "Sarah Amalia",
+    userName: "Nurul Fathonah",
     userRole: "BRIDE",
     action: "Menambahkan Mukena Sutra Royale Premium ke Box 1 Seserahan",
     timeAgo: "10 menit yang lalu",
   },
   {
     id: "act-2",
-    userName: "Dwiki Ramadhan",
+    userName: "Muhammad Heru",
     userRole: "GROOM",
     action: "Menyetor tabungan bersama sebesar Rp 5.000.000",
     timeAgo: "2 jam yang lalu",
   },
   {
     id: "act-3",
-    userName: "Sarah Amalia",
+    userName: "Nurul Fathonah",
     userRole: "BRIDE",
     action: "Mencentang selesai: Tes Kesehatan Catin di Puskesmas & Elsimil",
     timeAgo: "Kemarin",
   },
   {
     id: "act-4",
-    userName: "Dwiki Ramadhan",
+    userName: "Muhammad Heru",
     userRole: "GROOM",
     action: "Memasukkan rincian Kulkas 2 Pintu LG ke Wishlist Pasca-Nikah",
     timeAgo: "2 hari yang lalu",
@@ -74,7 +75,7 @@ export const mockChecklist: ChecklistItem[] = [
     category: "ADMINISTRASI_KUA",
     timelineTag: "H-3 Bulan",
     status: "COMPLETED",
-    assignedTo: "Dwiki (Suami)",
+    assignedTo: "Heru (Suami)",
     isOfficialKUA: true,
   },
   {
@@ -84,7 +85,7 @@ export const mockChecklist: ChecklistItem[] = [
     category: "ADMINISTRASI_KUA",
     timelineTag: "H-3 Bulan",
     status: "COMPLETED",
-    assignedTo: "Sarah (Istri)",
+    assignedTo: "Nurul (Istri)",
     isOfficialKUA: true,
   },
   {
@@ -119,11 +120,11 @@ export const mockChecklist: ChecklistItem[] = [
   {
     id: "chk-6",
     title: "Fitting Pertama Busana Akad & Resepsi",
-    description: "Fitting kebaya adat Sunda siger untuk Sarah dan beskap pengantin untuk Dwiki.",
+    description: "Fitting kebaya adat Sunda siger untuk Nurul dan beskap pengantin untuk Heru.",
     category: "BUSANA_MUA",
     timelineTag: "H-2 Bulan",
     status: "IN_PROGRESS",
-    assignedTo: "Sarah (Istri)",
+    assignedTo: "Nurul (Istri)",
   },
   {
     id: "chk-7",
@@ -132,7 +133,7 @@ export const mockChecklist: ChecklistItem[] = [
     category: "UNDANGAN_SOUVENIR",
     timelineTag: "H-2 Bulan",
     status: "TODO",
-    assignedTo: "Dwiki (Suami)",
+    assignedTo: "Heru (Suami)",
   },
 ];
 
@@ -250,7 +251,7 @@ export const mockPostWeddingItems: PostWeddingItem[] = [
     priority: "MUST_HAVE",
     isAcquired: false,
     isGiftClaimable: true,
-    claimedBy: "Sahabat Kampus Dwiki (Patungan 5 Orang)",
+    claimedBy: "Sahabat Kampus Heru (Patungan 5 Orang)",
   },
   {
     id: "pw-3",
@@ -273,7 +274,7 @@ export const mockPostWeddingItems: PostWeddingItem[] = [
     priority: "MUST_HAVE",
     isAcquired: true,
     isGiftClaimable: true,
-    claimedBy: "Mba Rina (Kakak Kandung Sarah)",
+    claimedBy: "Mba Rina (Kakak Kandung Nurul)",
   },
   {
     id: "pw-5",
@@ -332,7 +333,7 @@ export const mockGuests: GuestItem[] = [
   },
   {
     id: "g-4",
-    name: "Anisa Putri & Suami (Sahabat SMA Sarah)",
+    name: "Anisa Putri & Suami (Sahabat SMA Nurul)",
     side: "BRIDE",
     category: "Sahabat",
     pax: 2,
@@ -357,7 +358,7 @@ export const mockRundown: RundownItem[] = [
     startTime: "05:00",
     endTime: "07:30",
     activity: "Make Up & Rias Pengantin, Ibu, dan Bridesmaids",
-    picName: "MUA Wardah Gallery & Bestie Sarah",
+    picName: "MUA Wardah Gallery & Bestie Nurul",
     picPhone: "081299887766",
     location: "Ruang Rias Utama Gedung",
     phase: "Akad Nikah",

@@ -20,9 +20,14 @@ export type RSVPStatus = "PENDING" | "CONFIRMED_ATTENDING" | "DECLINED";
 export interface User {
   id: string;
   name: string;
+  nickname?: string;
   email: string;
   image?: string;
+  avatarCardId?: string;
+  phone?: string;
+  bio?: string;
   role: RoleType;
+  provider?: "google" | "credentials" | "guest";
 }
 
 export interface WeddingProject {
@@ -30,21 +35,30 @@ export interface WeddingProject {
   title: string;
   groomName: string;
   brideName: string;
-  weddingDate: string; // ISO string
+  weddingDate: string; // ISO string or YYYY-MM-DD
   city: string;
   targetBudget: number;
   currentSavings: number;
   inviteCode: string;
+  slug?: string;
+  venueName?: string;
+  venueAddress?: string;
+  maharDetails?: string;
+  waliNikah?: string;
+  penghulu?: string;
+  saksiNikah?: string;
   isPartnerConnected: boolean;
   partnerInfo?: {
     name: string;
     role: RoleType;
     image?: string;
     email: string;
+    avatarCardId?: string;
   };
 }
 
 export interface SavingContribution {
+  id?: string;
   label: string;
   amount: number;
   percentage: number;
@@ -56,9 +70,9 @@ export interface ChecklistItem {
   title: string;
   description: string;
   category: TaskCategory;
-  timelineTag: string; // e.g., 'H-6 Bulan', 'H-3 Bulan', 'H-1 Bulan'
+  timelineTag: string; // e.g., 'H-12 Bulan', 'H-6 Bulan', 'H-3 Bulan', 'H-2 Bulan', 'H-1 Bulan'
   status: TaskStatus;
-  assignedTo: string; // 'Dwiki (Suami)', 'Sarah (Istri)', 'Bersama'
+  assignedTo: string;
   dueDate?: string;
   attachmentUrl?: string;
   isOfficialKUA?: boolean;
@@ -101,6 +115,7 @@ export interface GuestItem {
   rsvpStatus: RSVPStatus;
   envelopeAmount?: number;
   giftDescription?: string;
+  notes?: string;
 }
 
 export interface ActivityLog {
@@ -109,6 +124,7 @@ export interface ActivityLog {
   userRole: RoleType;
   action: string;
   timeAgo: string;
+  timestamp?: number;
 }
 
 export interface RundownItem {
@@ -129,4 +145,57 @@ export interface FamilyQuota {
   groomParentsQuota: number;
   brideParentsQuota: number;
   costPerPax: number;
+}
+
+export interface BudgetCategory {
+  id: string;
+  name: string;
+  allocated: number;
+  spent: number;
+  status: "LUNAS" | "DP_TERBAYAR" | "BELUM_BAYAR";
+  vendor?: string;
+}
+
+export interface VendorStage {
+  name: string;
+  percentage: number;
+  amount: number;
+  isPaid: boolean;
+  condition: string;
+}
+
+export interface VendorMilestone {
+  id: string;
+  vendorName: string;
+  serviceType: string;
+  totalContract: number;
+  contactPerson?: string;
+  contactPhone?: string;
+  stages: VendorStage[];
+}
+
+export interface AlignmentTopic {
+  id: string;
+  category: "FINANCIAL" | "LIVING" | "PARENTS" | "CAREER";
+  question: string;
+  groomAnswer: string;
+  brideAnswer: string;
+  isAgreed: boolean;
+}
+
+export interface AdminRequirement {
+  id: string;
+  title: string;
+  isDone: boolean;
+  note?: string;
+}
+
+export interface AdminStep {
+  id: string;
+  stepNumber: number;
+  stageName: string;
+  agency: string;
+  estimatedDays: string;
+  cost: string;
+  requirements: AdminRequirement[];
 }
