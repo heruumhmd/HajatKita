@@ -504,12 +504,21 @@ export async function POST(req: NextRequest) {
 
       const primaryEmail = existingWedding.primary_user_email || historyRec?.user1_email || (userEmail && userEmail !== partnerEmail ? userEmail : null);
 
+      let validWeddingDate: string | null = null;
+      if (wedding?.weddingDate) {
+        if (typeof wedding.weddingDate === "string" && wedding.weddingDate.trim() !== "") {
+          validWeddingDate = wedding.weddingDate.trim().split("T")[0];
+        } else if (wedding.weddingDate instanceof Date) {
+          validWeddingDate = wedding.weddingDate.toISOString().split("T")[0];
+        }
+      }
+
       await sql`
         UPDATE weddings SET
           title = ${wedding?.title || existingWedding.title || "Pernikahan Kita"},
           groom_name = COALESCE(NULLIF(${wedding?.groomName || ""}, ''), groom_name),
           bride_name = COALESCE(NULLIF(${wedding?.brideName || ""}, ''), bride_name),
-          wedding_date = COALESCE(NULLIF(${wedding?.weddingDate || ""}, ''), wedding_date),
+          wedding_date = COALESCE(${validWeddingDate}::date, wedding_date),
           city = COALESCE(NULLIF(${wedding?.city || ""}, ''), city),
           target_budget = ${wedding?.targetBudget !== undefined ? wedding.targetBudget : existingWedding.target_budget},
           current_savings = ${wedding?.currentSavings !== undefined ? wedding.currentSavings : existingWedding.current_savings},
@@ -532,6 +541,15 @@ export async function POST(req: NextRequest) {
         WHERE id = ${savedWeddingId}::uuid
       `;
     } else {
+      let validWeddingDate: string | null = null;
+      if (wedding?.weddingDate) {
+        if (typeof wedding.weddingDate === "string" && wedding.weddingDate.trim() !== "") {
+          validWeddingDate = wedding.weddingDate.trim().split("T")[0];
+        } else if (wedding.weddingDate instanceof Date) {
+          validWeddingDate = wedding.weddingDate.toISOString().split("T")[0];
+        }
+      }
+
       const insertRows = await sql`
         INSERT INTO weddings (
           title, invite_code, groom_name, bride_name, wedding_date, city,
@@ -544,7 +562,7 @@ export async function POST(req: NextRequest) {
           ${inviteCode},
           ${wedding?.groomName || ""},
           ${wedding?.brideName || ""},
-          ${wedding?.weddingDate || ""},
+          ${validWeddingDate}::date,
           ${wedding?.city || ""},
           ${wedding?.targetBudget || 0},
           ${wedding?.currentSavings || 0},

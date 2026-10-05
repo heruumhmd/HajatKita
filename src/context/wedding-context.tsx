@@ -604,14 +604,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         const resData = await res.json();
         if (resData.success && resData.weddingId) {
           setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId } : prev));
+        } else if (!resData.success) {
+          console.warn("Auto-save returned error from server:", resData.error || resData.message);
         }
       } catch (e) {
         console.warn("Auto-save to database deferred", e);
       } finally {
         // Allow polling to resume after save completes
-        setTimeout(() => { pendingSaveRef.current = false; }, 1500);
+        setTimeout(() => { pendingSaveRef.current = false; }, 800);
       }
-    }, 600);
+    }, 300);
 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
