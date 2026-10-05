@@ -126,11 +126,11 @@ export function AppSidebar({
         {/* Brand Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
           <Link href="/" className="flex items-center gap-2.5" onClick={onClose}>
-            <div className="w-9 h-9 rounded-xl bg-pastel-50 flex items-center justify-center text-pastel-700 border border-pastel-200 shadow-2xs">
-              <Heart className="w-4 h-4 fill-pastel-600 text-pastel-600" />
+            <div className="w-10 h-10 rounded-xl logo-3d flex items-center justify-center animate-float-3d">
+              <span className="text-lg filter drop-shadow-sm">💍</span>
             </div>
             <div>
-              <h1 className="font-extrabold text-slate-900 text-sm tracking-tight font-serif">
+              <h1 className="font-bold text-slate-900 text-sm tracking-wider font-display">
                 Hajat Kita
               </h1>
               <p className="text-[10px] font-semibold text-slate-500">

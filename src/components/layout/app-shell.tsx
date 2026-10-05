@@ -46,8 +46,23 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  const groomShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "";
-  const brideShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "";
+  // Prioritas: nickname user saat ini > nickname partner > nama depan mempelai
+  const myNickname = currentUser?.nickname || "";
+  const myRole = currentUser?.role;
+  const partnerNick = wedding.partnerInfo?.name?.split(" ")[0] || "";
+
+  const groomShort = (myRole === "GROOM" && myNickname)
+    ? myNickname
+    : (myRole !== "GROOM" && partnerNick)
+    ? partnerNick
+    : (wedding.groomName ? wedding.groomName.split(" ")[0] : "");
+
+  const brideShort = (myRole === "BRIDE" && myNickname)
+    ? myNickname
+    : (myRole !== "BRIDE" && partnerNick)
+    ? partnerNick
+    : (wedding.brideName ? wedding.brideName.split(" ")[0] : "");
+
   const coupleTitle =
     groomShort && brideShort
       ? `${groomShort} & ${brideShort}`

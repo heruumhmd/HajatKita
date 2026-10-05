@@ -84,7 +84,7 @@ export function CuteAvatarBadge({
         className={`w-6 h-6 rounded-full flex items-center justify-center text-xs border ${card.theme.border} ${card.theme.bgGradient} bg-gradient-to-br shadow-2xs shrink-0`}
         title={`${card.name} (${card.roleLabel})`}
       >
-        <span>{card.emoji.slice(0, 2)}</span>
+        <span>{[...card.emoji][0]}</span>
       </div>
     );
   }
@@ -95,7 +95,7 @@ export function CuteAvatarBadge({
         className={`w-7 h-7 sm:w-8 sm:h-8 rounded-xl flex items-center justify-center text-sm border-2 ${card.theme.border} ${card.theme.bgGradient} bg-gradient-to-br shadow-2xs shrink-0`}
         title={`${card.name} (${card.roleLabel})`}
       >
-        <span>{card.emoji.slice(0, 2)}</span>
+        <span>{[...card.emoji][0]}</span>
       </div>
     );
   }
@@ -105,7 +105,7 @@ export function CuteAvatarBadge({
       <div
         className={`w-14 h-14 sm:w-16 sm:h-16 rounded-2xl flex flex-col items-center justify-center text-2xl border-2 ${card.theme.border} ${card.theme.bgGradient} bg-gradient-to-br shadow-sm shrink-0 relative`}
       >
-        <span>{card.emoji.slice(0, 2)}</span>
+        <span>{[...card.emoji][0]}</span>
         <span
           className={`absolute -bottom-1 text-[8px] font-extrabold px-1.5 py-0.2 rounded-full ${card.theme.badgeBg} ${card.theme.badgeText} truncate max-w-[90%]`}
         >
@@ -120,7 +120,7 @@ export function CuteAvatarBadge({
     <div
       className={`flex items-center gap-1.5 px-2 py-1 rounded-xl border ${card.theme.border} ${card.theme.bgGradient} bg-gradient-to-br shadow-2xs`}
     >
-      <span className="text-base">{card.emoji.slice(0, 2)}</span>
+      <span className="text-base">{[...card.emoji][0]}</span>
       <div className="flex flex-col text-left">
         <span className="text-[10px] font-extrabold text-slate-800 leading-none">
           {name || card.name}

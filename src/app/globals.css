@@ -130,3 +130,124 @@ h1, h2, h3, .font-serif {
   color: #475569 !important;
   line-height: 1.6 !important;
 }
+
+/* ===== 3D Claymorphic & Animation Enhancements ===== */
+
+/* Claymorphic Button Style */
+.clay-btn {
+  background: linear-gradient(145deg, #f0f4ff, #dce4f5);
+  box-shadow: inset 2px 2px 5px rgba(255,255,255,0.9),
+              inset -2px -2px 5px rgba(29,80,162,0.08),
+              5px 5px 15px rgba(29,80,162,0.12);
+  border: 1px solid rgba(255,255,255,0.6);
+  border-radius: 1rem;
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.clay-btn:hover {
+  box-shadow: inset 1px 1px 3px rgba(255,255,255,0.7),
+              inset -1px -1px 3px rgba(29,80,162,0.06),
+              3px 3px 10px rgba(29,80,162,0.15);
+  transform: translateY(-1px);
+}
+
+.clay-btn:active {
+  transform: translateY(0.5px);
+  box-shadow: inset 3px 3px 6px rgba(29,80,162,0.12),
+              inset -1px -1px 2px rgba(255,255,255,0.5);
+}
+
+/* Claymorphic Card */
+.clay-card {
+  background: linear-gradient(145deg, #ffffff, #f0f4ff);
+  box-shadow: 6px 6px 20px rgba(29,80,162,0.10),
+              -4px -4px 12px rgba(255,255,255,0.9),
+              inset 1px 1px 2px rgba(255,255,255,0.8);
+  border: 1px solid rgba(255,255,255,0.7);
+  border-radius: 1.25rem;
+}
+
+/* 3D Card Hover Effect */
+.card-3d {
+  perspective: 800px;
+}
+
+.card-3d-inner {
+  transition: transform 0.4s cubic-bezier(0.23, 1, 0.32, 1),
+              box-shadow 0.4s cubic-bezier(0.23, 1, 0.32, 1);
+  transform-style: preserve-3d;
+}
+
+.card-3d-inner:hover {
+  transform: rotateX(-2deg) rotateY(3deg) translateZ(8px);
+  box-shadow: 0 20px 40px -10px rgba(0,0,0,0.08),
+              0 8px 16px -6px rgba(29,80,162,0.12);
+}
+
+/* 3D Logo Badge */
+.logo-3d {
+  background: linear-gradient(135deg, #e8eeff 0%, #c4d4f7 50%, #a8bfef 100%);
+  box-shadow: inset 2px 2px 4px rgba(255,255,255,0.9),
+              inset -1px -1px 3px rgba(29,80,162,0.15),
+              4px 4px 12px rgba(29,80,162,0.20),
+              -2px -2px 6px rgba(255,255,255,0.7);
+  border: 1px solid rgba(255,255,255,0.6);
+  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+}
+
+.logo-3d:hover {
+  transform: scale(1.08) rotate(3deg);
+  box-shadow: inset 2px 2px 4px rgba(255,255,255,0.8),
+              inset -1px -1px 3px rgba(29,80,162,0.12),
+              6px 6px 18px rgba(29,80,162,0.25),
+              -3px -3px 8px rgba(255,255,255,0.6);
+}
+
+/* Floating 3D Animation */
+@keyframes float-3d {
+  0%, 100% { transform: translateY(0) rotateX(0) rotateZ(0); }
+  25% { transform: translateY(-4px) rotateX(2deg) rotateZ(1deg); }
+  50% { transform: translateY(-6px) rotateX(0deg) rotateZ(0deg); }
+  75% { transform: translateY(-3px) rotateX(-1deg) rotateZ(-0.5deg); }
+}
+
+.animate-float-3d {
+  animation: float-3d 4s ease-in-out infinite;
+}
+
+/* Pulsing Glow Effect */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 8px rgba(29,80,162,0.15), 0 0 20px rgba(29,80,162,0.05); }
+  50% { box-shadow: 0 0 16px rgba(29,80,162,0.25), 0 0 32px rgba(29,80,162,0.10); }
+}
+
+.animate-pulse-glow {
+  animation: pulse-glow 3s ease-in-out infinite;
+}
+
+/* 3D Embossed Badge */
+.badge-3d {
+  background: linear-gradient(135deg, #fef3c7, #f59e0b, #d97706);
+  box-shadow: inset 1px 1px 2px rgba(255,255,255,0.6),
+              inset -1px -1px 2px rgba(146,64,14,0.2),
+              2px 2px 6px rgba(146,64,14,0.15);
+  color: #78350f;
+  border: 1px solid rgba(255,255,255,0.4);
+  text-shadow: 0 1px 0 rgba(255,255,255,0.3);
+}
+
+/* Duo Avatar Overlap with 3D depth */
+.duo-avatars {
+  perspective: 600px;
+}
+
+.duo-avatars > *:first-child {
+  z-index: 2;
+  transform: translateZ(4px);
+}
+
+.duo-avatars > *:last-child {
+  z-index: 1;
+  margin-left: -8px;
+  transform: translateZ(0px);
+}

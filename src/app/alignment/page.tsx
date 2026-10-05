@@ -17,7 +17,14 @@ export default function AlignmentPage() {
     loadRecommendedAlignmentTopics,
     wedding,
     requireAuth,
+    refreshWorkspace,
   } = useWedding();
+
+  // Muat data terbaru dari database saat halaman dibuka
+  React.useEffect(() => {
+    refreshWorkspace();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [isTopicModalOpen, setIsTopicModalOpen] = useState(false);
   const [editingTopic, setEditingTopic] = useState<AlignmentTopic | null>(null);

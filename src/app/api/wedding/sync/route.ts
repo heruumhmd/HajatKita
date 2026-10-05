@@ -18,10 +18,18 @@ export async function GET(req: NextRequest) {
     }
 
     const inviteCode = searchParams.get("code")?.trim().toUpperCase();
+    const slug = searchParams.get("slug")?.trim().toLowerCase();
 
     let weddingRow = null;
 
-    if (inviteCode) {
+    if (slug) {
+      const rows = await sql`
+        SELECT * FROM weddings WHERE LOWER(slug) = ${slug} LIMIT 1
+      `;
+      if (rows && rows.length > 0) {
+        weddingRow = rows[0];
+      }
+    } else if (inviteCode) {
       const rows = await sql`
         SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
       `;
@@ -206,6 +214,142 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json();
+
+    // 1. Special Action: RSVP from Public Digital Invitation
+    if (body.action === "RSVP") {
+      const { slug, weddingId, guest } = body;
+      if (!guest || !guest.name) {
+        return NextResponse.json({ success: false, message: "Nama tamu wajib diisi" }, { status: 400 });
+      }
+
+      let wRow = null;
+      if (weddingId && weddingId !== "w-main") {
+        const rows = await sql`SELECT * FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
+        if (rows && rows.length > 0) wRow = rows[0];
+      }
+      if (!wRow && slug) {
+        const rows = await sql`SELECT * FROM weddings WHERE LOWER(slug) = ${slug.toLowerCase().trim()} LIMIT 1`;
+        if (rows && rows.length > 0) wRow = rows[0];
+      }
+
+      if (!wRow) {
+        return NextResponse.json({ success: false, message: "Pernikahan tidak ditemukan" }, { status: 404 });
+      }
+
+      let planData: any = {};
+      if (wRow.plan_data) {
+        try {
+          planData = JSON.parse(wRow.plan_data);
+        } catch (e) {}
+      }
+
+      const guests = Array.isArray(planData.guests) ? planData.guests : [];
+      const newGuest = {
+        id: `g-${Date.now()}`,
+        name: guest.name.trim(),
+        phone: guest.phone || "-",
+        side: guest.side || "BOTH",
+        category: "Undangan Digital",
+        pax: guest.pax !== undefined ? guest.pax : 2,
+        rsvpStatus: guest.rsvpStatus || "CONFIRMED_ATTENDING",
+        notes: guest.notes || "",
+        envelopeAmount: 0,
+        giftDescription: "",
+      };
+
+      const existingIdx = guests.findIndex(
+        (g: any) => g.name.toLowerCase() === guest.name.toLowerCase().trim()
+      );
+      if (existingIdx >= 0) {
+        guests[existingIdx] = { ...guests[existingIdx], ...newGuest, id: guests[existingIdx].id };
+      } else {
+        guests.unshift(newGuest);
+      }
+
+      const activityLogs = Array.isArray(planData.activityLogs) ? planData.activityLogs : [];
+      activityLogs.unshift({
+        id: `act-${Date.now()}`,
+        userName: guest.name,
+        userRole: "COLLABORATOR",
+        action: `Mengonfirmasi kehadiran via Undangan Digital (${guest.rsvpStatus === "CONFIRMED_ATTENDING" ? `Hadir ${guest.pax || 2} Pax` : "Tidak Hadir"})`,
+        timeAgo: "Baru saja",
+        timestamp: Date.now(),
+      });
+
+      planData.guests = guests;
+      planData.activityLogs = activityLogs.slice(0, 30);
+
+      await sql`
+        UPDATE weddings SET
+          plan_data = ${JSON.stringify(planData)},
+          updated_at = NOW()
+        WHERE id = ${wRow.id}::uuid
+      `;
+
+      return NextResponse.json({ success: true, message: "Konfirmasi kehadiran berhasil tersimpan ke database! 💌" });
+    }
+
+    // 2. Special Action: Claim Gift from Public Registry
+    if (body.action === "CLAIM_GIFT") {
+      const { slug, weddingId, itemId, friendName } = body;
+      if (!itemId || !friendName) {
+        return NextResponse.json({ success: false, message: "Data klaim kado tidak lengkap" }, { status: 400 });
+      }
+
+      let wRow = null;
+      if (weddingId && weddingId !== "w-main") {
+        const rows = await sql`SELECT * FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
+        if (rows && rows.length > 0) wRow = rows[0];
+      }
+      if (!wRow && slug) {
+        const rows = await sql`SELECT * FROM weddings WHERE LOWER(slug) = ${slug.toLowerCase().trim()} LIMIT 1`;
+        if (rows && rows.length > 0) wRow = rows[0];
+      }
+
+      if (!wRow) {
+        return NextResponse.json({ success: false, message: "Pernikahan tidak ditemukan" }, { status: 404 });
+      }
+
+      let planData: any = {};
+      if (wRow.plan_data) {
+        try {
+          planData = JSON.parse(wRow.plan_data);
+        } catch (e) {}
+      }
+
+      const postWedding = Array.isArray(planData.postWedding) ? planData.postWedding : [];
+      let claimedItemName = "Kado";
+      const updatedPostWedding = postWedding.map((item: any) => {
+        if (item.id === itemId) {
+          claimedItemName = item.name;
+          return { ...item, isAcquired: true, claimedBy: friendName.trim() };
+        }
+        return item;
+      });
+
+      const activityLogs = Array.isArray(planData.activityLogs) ? planData.activityLogs : [];
+      activityLogs.unshift({
+        id: `act-${Date.now()}`,
+        userName: friendName.trim(),
+        userRole: "COLLABORATOR",
+        action: `Mengklaim kado pernikahan: "${claimedItemName}" dari wishlist`,
+        timeAgo: "Baru saja",
+        timestamp: Date.now(),
+      });
+
+      planData.postWedding = updatedPostWedding;
+      planData.activityLogs = activityLogs.slice(0, 30);
+
+      await sql`
+        UPDATE weddings SET
+          plan_data = ${JSON.stringify(planData)},
+          updated_at = NOW()
+        WHERE id = ${wRow.id}::uuid
+      `;
+
+      return NextResponse.json({ success: true, message: "Klaim kado berhasil disimpan ke database! 🎁" });
+    }
+
     const {
       wedding,
       savingContributions,

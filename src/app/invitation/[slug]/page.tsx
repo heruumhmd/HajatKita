@@ -23,6 +23,27 @@ export default function DynamicInvitationPage() {
   const slug = (params?.slug as string) || "kami-berdua";
   const { wedding, addGuest, guests } = useWedding();
 
+  const [weddingData, setWeddingData] = useState(wedding);
+
+  useEffect(() => {
+    async function loadWeddingBySlug() {
+      try {
+        const res = await fetch(`/api/wedding/sync?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        if (data.success && data.wedding) {
+          setWeddingData(data.wedding);
+        }
+      } catch (e) {
+        console.error("Failed to load invitation from DB", e);
+      }
+    }
+    if (slug) {
+      loadWeddingBySlug();
+    }
+  }, [slug]);
+
+  const activeWedding = (weddingData && (weddingData.groomName || weddingData.brideName)) ? weddingData : wedding;
+
   // Guest RSVP Form State
   const [guestName, setGuestName] = useState("");
   const [guestPhone, setGuestPhone] = useState("");
@@ -32,18 +53,18 @@ export default function DynamicInvitationPage() {
   const [wishes, setWishes] = useState("");
   const [submitted, setSubmitted] = useState(false);
 
-  const groomShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "Pria";
-  const brideShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "Wanita";
+  const groomShort = activeWedding.groomName ? activeWedding.groomName.split(" ")[0] : "Pria";
+  const brideShort = activeWedding.brideName ? activeWedding.brideName.split(" ")[0] : "Wanita";
 
   // Countdown timer
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
 
   useEffect(() => {
-    if (!wedding.weddingDate) {
+    if (!activeWedding.weddingDate) {
       setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       return;
     }
-    const targetDate = new Date(wedding.weddingDate).getTime();
+    const targetDate = new Date(activeWedding.weddingDate).getTime();
     if (isNaN(targetDate)) {
       setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       return;
@@ -65,12 +86,37 @@ export default function DynamicInvitationPage() {
     updateCountdown();
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
-  }, [wedding.weddingDate]);
+  }, [activeWedding.weddingDate]);
 
-  const handleRsvpSubmit = (e: React.FormEvent) => {
+  const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!guestName.trim()) return;
 
+    // 1. Direct persistent save to Neon Database
+    try {
+      await fetch("/api/wedding/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "RSVP",
+          slug,
+          weddingId: activeWedding.id,
+          guest: {
+            name: guestName,
+            side: guestSide,
+            category: "Undangan Digital",
+            pax: rsvpStatus === "CONFIRMED_ATTENDING" ? pax : 0,
+            phone: guestPhone || "-",
+            rsvpStatus,
+            notes: wishes,
+          },
+        }),
+      });
+    } catch (err) {
+      console.warn("Direct RSVP to DB error", err);
+    }
+
+    // 2. Also update local context state
     addGuest({
       name: guestName,
       side: guestSide,
@@ -94,13 +140,13 @@ export default function DynamicInvitationPage() {
     setSubmitted(true);
     showSuccessAlert(
       "Konfirmasi Kehadiran Terkirim!",
-      `Terima kasih ${guestName}, konfirmasi dan doa restu Anda telah berhasil tersimpan.`
+      `Terima kasih ${guestName}, konfirmasi dan doa restu Anda telah berhasil tersimpan ke database.`
     );
   };
 
   // Format date readable
-  const formattedDate = wedding.weddingDate
-    ? new Date(wedding.weddingDate).toLocaleDateString("id-ID", {
+  const formattedDate = activeWedding.weddingDate
+    ? new Date(activeWedding.weddingDate).toLocaleDateString("id-ID", {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -127,11 +173,11 @@ export default function DynamicInvitationPage() {
               Dengan penuh rasa syukur mengundang Anda ke pernikahan:
             </p>
             <h1 className="text-3xl sm:text-5xl font-serif font-black text-slate-900 tracking-tight">
-              {wedding.groomName || "Calon Suami"}
+              {activeWedding.groomName || "Calon Suami"}
             </h1>
             <span className="font-serif italic text-2xl sm:text-3xl text-amber-600 font-normal">&amp;</span>
             <h1 className="text-3xl sm:text-5xl font-serif font-black text-slate-900 tracking-tight">
-              {wedding.brideName || "Calon Istri"}
+              {activeWedding.brideName || "Calon Istri"}
             </h1>
           </div>
 
@@ -143,7 +189,7 @@ export default function DynamicInvitationPage() {
             </span>
             <span className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-pastel-50 border border-sky-100 text-pastel-800">
               <MapPin className="w-4 h-4 text-pastel-600" />
-              {wedding.city || "Indonesia"}
+              {activeWedding.city || "Indonesia"}
             </span>
           </div>
 
@@ -190,9 +236,9 @@ export default function DynamicInvitationPage() {
               </div>
               <p className="text-base font-extrabold text-slate-800">08:00 - 10:00 WIB</p>
               <p className="text-xs text-slate-500 leading-relaxed">
-                {wedding.venueName || "Gedung / Kediaman Mempelai"}
+                {activeWedding.venueName || "Gedung / Kediaman Mempelai"}
                 <br />
-                {wedding.venueAddress || wedding.city}
+                {activeWedding.venueAddress || activeWedding.city}
               </p>
             </div>
 
@@ -203,9 +249,9 @@ export default function DynamicInvitationPage() {
               </div>
               <p className="text-base font-extrabold text-slate-800">11:00 - 14:00 WIB</p>
               <p className="text-xs text-slate-500 leading-relaxed">
-                {wedding.venueName || "Grand Ballroom"}
+                {activeWedding.venueName || "Grand Ballroom"}
                 <br />
-                {wedding.venueAddress || wedding.city}
+                {activeWedding.venueAddress || activeWedding.city}
               </p>
             </div>
           </div>
@@ -227,7 +273,7 @@ export default function DynamicInvitationPage() {
               </div>
               <h3 className="font-extrabold text-slate-800 text-base">Terima Kasih, {guestName}!</h3>
               <p className="text-xs text-slate-600">
-                Konfirmasi dan doa restu Anda telah tercatat langsung di sistem rencana pernikahan {wedding.groomName} &amp; {wedding.brideName}.
+                Konfirmasi dan doa restu Anda telah tercatat langsung di sistem rencana pernikahan {activeWedding.groomName} &amp; {activeWedding.brideName}.
               </p>
               <button
                 type="button"

@@ -291,6 +291,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const { data: session } = useSession();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pendingSaveRef = useRef(false);
   const pendingAuthCallbackRef = useRef<(() => void) | null>(null);
   const currentUserRef = useRef<User | null>(currentUser);
 
@@ -326,6 +327,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Load from Database whenever user logs in or polls
   const fetchDbData = useCallback(async (email?: string, code?: string) => {
+    // Skip polling while a save is in progress to prevent overwriting fresh data
+    if (pendingSaveRef.current) return;
     try {
       const activeUser = currentUserRef.current;
       const activeEmail = (email || activeUser?.email || "").toLowerCase().trim();
@@ -434,7 +437,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(p.budgetCategories)) setBudgetCategories(p.budgetCategories);
           if (Array.isArray(p.vendors)) setVendors(p.vendors);
           if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
-          if (Array.isArray(p.adminSteps)) setAdminSteps(p.adminSteps);
+          if (Array.isArray(p.adminSteps) && p.adminSteps.length > 0) setAdminSteps(p.adminSteps);
           if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
         }
       }
@@ -575,6 +578,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       clearTimeout(saveTimeoutRef.current);
     }
 
+    pendingSaveRef.current = true;
     saveTimeoutRef.current = setTimeout(async () => {
       try {
         const res = await fetch("/api/wedding/sync", {
@@ -603,8 +607,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         }
       } catch (e) {
         console.warn("Auto-save to database deferred", e);
+      } finally {
+        // Allow polling to resume after save completes
+        setTimeout(() => { pendingSaveRef.current = false; }, 1500);
       }
-    }, 1200);
+    }, 600);
 
     return () => {
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
@@ -864,9 +871,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       }
       setIsAuthModalOpen(true);
       return false;
-    }
-    if (callback) {
-      callback();
     }
     return true;
   };
@@ -1155,9 +1159,24 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const toggleAlignmentAgreed = (id: string) => {
+    let targetQuestion = "";
+    let nextAgreed = false;
     setAlignmentTopics((prev) =>
-      prev.map((t) => (t.id === id ? { ...t, isAgreed: !t.isAgreed } : t))
+      prev.map((t) => {
+        if (t.id === id) {
+          nextAgreed = !t.isAgreed;
+          targetQuestion = t.question;
+          return { ...t, isAgreed: nextAgreed };
+        }
+        return t;
+      })
     );
+    if (targetQuestion) {
+      const actionText = nextAgreed
+        ? `Menyepakati topik diskusi pranikah: "${targetQuestion.substring(0, 35)}..."`
+        : `Membatalkan kesepakatan topik: "${targetQuestion.substring(0, 35)}..."`;
+      addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", actionText);
+    }
   };
 
   const addAlignmentTopic = (question: string, category: AlignmentTopic["category"]) => {
@@ -1170,6 +1189,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       isAgreed: false,
     };
     setAlignmentTopics((prev) => [...prev, newTopic]);
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan topik pranikah: "${question.substring(0, 35)}..."`);
   };
 
   const editAlignmentTopic = (id: string, question: string, category: AlignmentTopic["category"]) => {
@@ -1180,10 +1200,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const deleteAlignmentTopic = (id: string) => {
     setAlignmentTopics((prev) => prev.filter((t) => t.id !== id));
+    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Menghapus topik diskusi pranikah");
   };
 
   const loadRecommendedAlignmentTopics = () => {
-    setAlignmentTopics(defaultAlignmentTopics);
+    setAlignmentTopics(defaultAlignmentTopics.map((t) => ({ ...t })));
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Memuat rekomendasi topik diskusi pranikah");
   };
 

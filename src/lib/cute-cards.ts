@@ -239,6 +239,23 @@ export const CUTE_CARDS: CuteCard[] = [
       glow: "shadow-amber-100",
     },
   },
+  {
+    id: "rabbit-groom",
+    name: "Kelinci Rafi",
+    roleLabel: "Calon Suami Gesit",
+    gender: "GROOM",
+    personality: "Cekatan & Penuh Kasih",
+    quote: "Melompat maju mempersiapkan masa depan penuh cinta!",
+    emoji: "🐰💙",
+    theme: {
+      bgGradient: "from-sky-50 via-indigo-50 to-violet-50",
+      border: "border-indigo-300",
+      accent: "text-indigo-700",
+      badgeBg: "bg-indigo-600",
+      badgeText: "text-white",
+      glow: "shadow-indigo-100",
+    },
+  },
 
   // --- CALON ISTRI (BRIDE) ---
   {

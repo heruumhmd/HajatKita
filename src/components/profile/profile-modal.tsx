@@ -266,6 +266,7 @@ export function ProfileModal() {
                 <button
                   type="button"
                   onClick={() => {
+                    updateUserProfile({ avatarCardId: avatarCardId });
                     setActiveTab("BIODATA");
                     showToastSuccess(`Karakter ${currentCard.name} dipilih! ${currentCard.emoji}`);
                   }}
@@ -279,6 +280,8 @@ export function ProfileModal() {
                 selectedCardId={avatarCardId}
                 onSelectCard={(id) => {
                   setAvatarCardId(id);
+                  // Immediately commit to context so header updates
+                  updateUserProfile({ avatarCardId: id });
                   const c = getCuteCard(id);
                   showToastSuccess(`Karakter ${c.name} dipilih! ${c.emoji}`);
                 }}

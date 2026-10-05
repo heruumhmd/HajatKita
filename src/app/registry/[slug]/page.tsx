@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import {
   Gift,
@@ -14,6 +14,7 @@ import {
   Check,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
+import { PostWeddingItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
 import confetti from "canvas-confetti";
 import { showToastSuccess } from "@/lib/swal";
@@ -23,16 +24,64 @@ export default function DynamicRegistryPage() {
   const slug = (params?.slug as string) || "kami-berdua";
   const { wedding, postWedding, claimPostWedding } = useWedding();
 
+  const [weddingData, setWeddingData] = useState(wedding);
+  const [dbItems, setDbItems] = useState<PostWeddingItem[]>([]);
+
+  useEffect(() => {
+    async function loadRegistryBySlug() {
+      try {
+        const res = await fetch(`/api/wedding/sync?slug=${encodeURIComponent(slug)}`);
+        const data = await res.json();
+        if (data.success && data.wedding) {
+          setWeddingData(data.wedding);
+        }
+        if (data.success && data.planData && Array.isArray(data.planData.postWedding)) {
+          setDbItems(data.planData.postWedding);
+        }
+      } catch (e) {
+        console.error("Failed to load registry from DB", e);
+      }
+    }
+    if (slug) {
+      loadRegistryBySlug();
+    }
+  }, [slug]);
+
+  const activeWedding = (weddingData && (weddingData.groomName || weddingData.brideName)) ? weddingData : wedding;
+  const activePostWedding = dbItems.length > 0 ? dbItems : postWedding;
+
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [friendName, setFriendName] = useState("");
 
-  const claimableItems = postWedding.filter((i) => i.isGiftClaimable);
+  const claimableItems = activePostWedding.filter((i) => i.isGiftClaimable);
 
-  const handleClaimSubmit = (e: React.FormEvent) => {
+  const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!claimingId || !friendName.trim()) return;
 
+    // 1. Persist direct to database
+    try {
+      await fetch("/api/wedding/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "CLAIM_GIFT",
+          slug,
+          weddingId: activeWedding.id,
+          itemId: claimingId,
+          friendName: friendName.trim(),
+        }),
+      });
+    } catch (err) {
+      console.warn("Direct gift claim to DB error", err);
+    }
+
+    // 2. Update local state
+    setDbItems((prev) =>
+      prev.map((i) => (i.id === claimingId ? { ...i, isAcquired: true, claimedBy: friendName.trim() } : i))
+    );
     claimPostWedding(claimingId, friendName);
+
     try {
       confetti({
         particleCount: 70,
@@ -64,8 +113,8 @@ export default function DynamicRegistryPage() {
               Wishlist Kado Pernikahan
             </h1>
             <p className="text-sm font-serif italic text-amber-700">
-              {wedding.groomName && wedding.brideName
-                ? `${wedding.groomName} & ${wedding.brideName}`
+              {activeWedding.groomName && activeWedding.brideName
+                ? `${activeWedding.groomName} & ${activeWedding.brideName}`
                 : "Calon Mempelai"}
             </p>
           </div>
