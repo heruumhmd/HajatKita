@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { PostWeddingItem } from "@/types";
-import { formatRupiah } from "@/lib/utils";
+import { formatRupiah, safeUrl } from "@/lib/utils";
 import confetti from "canvas-confetti";
 import { showToastSuccess, showToastError } from "@/lib/swal";
 
@@ -290,9 +290,9 @@ export default function DynamicRegistryPage() {
                   </div>
 
                   <div className="pt-4 mt-3 border-t border-slate-100 flex items-center justify-between gap-2">
-                    {item.purchaseUrl && (
+                    {safeUrl(item.purchaseUrl) && (
                       <a
-                        href={item.purchaseUrl}
+                        href={safeUrl(item.purchaseUrl)}
                         target="_blank"
                         rel="noreferrer"
                         className="inline-flex items-center gap-1 text-xs text-pastel-600 font-semibold hover:underline"

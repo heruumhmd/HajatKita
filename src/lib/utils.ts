@@ -33,3 +33,25 @@ export function calculateDaysRemaining(targetDate: string): number {
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
 }
+
+export function safeUrl(input?: string | null): string {
+  if (!input) return "";
+  const trimmed = input.trim();
+  if (!trimmed) return "";
+
+  // If no scheme present, prepend https://
+  const withScheme = /^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)
+    ? trimmed
+    : `https://${trimmed}`;
+
+  try {
+    const parsed = new URL(withScheme);
+    if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+      return parsed.toString();
+    }
+    return "";
+  } catch {
+    return "";
+  }
+}
+

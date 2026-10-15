@@ -17,7 +17,7 @@ import {
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { SeserahanItem } from "@/types";
-import { formatRupiah } from "@/lib/utils";
+import { formatRupiah, safeUrl } from "@/lib/utils";
 import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
 
 export default function SeserahanPage() {
@@ -81,20 +81,12 @@ export default function SeserahanPage() {
     setIsModalOpen(true);
   };
 
-  const sanitizeUrl = (url: string) => {
-    const trimmed = (url || "").trim();
-    if (!trimmed) return "";
-    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
-      ? trimmed
-      : `https://${trimmed}`;
-  };
-
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
 
     const priceNum = Math.max(0, parseFloat(newPrice) || 0);
-    const cleanUrl = sanitizeUrl(newUrl);
+    const cleanUrl = safeUrl(newUrl);
 
     if (editingItem) {
       editSeserahan({
@@ -351,9 +343,9 @@ export default function SeserahanPage() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {item.purchaseUrl && (
+                  {safeUrl(item.purchaseUrl) && (
                     <a
-                      href={item.purchaseUrl}
+                      href={safeUrl(item.purchaseUrl)}
                       target="_blank"
                       rel="noreferrer"
                       className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg"

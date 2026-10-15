@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { PostWeddingItem, ItemPriority } from "@/types";
-import { formatRupiah } from "@/lib/utils";
+import { formatRupiah, safeUrl } from "@/lib/utils";
 import { showToastSuccess, showToastInfo, showConfirmDialog, showPromptDialog } from "@/lib/swal";
 
 export default function PostWeddingPage() {
@@ -87,20 +87,12 @@ export default function PostWeddingPage() {
     setIsModalOpen(true);
   };
 
-  const sanitizeUrl = (url: string) => {
-    const trimmed = (url || "").trim();
-    if (!trimmed) return "";
-    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
-      ? trimmed
-      : `https://${trimmed}`;
-  };
-
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
     const priceNum = Math.max(0, parseFloat(price) || 0);
-    const cleanUrl = sanitizeUrl(purchaseUrl);
+    const cleanUrl = safeUrl(purchaseUrl);
 
     if (editingItem) {
       editPostWedding({
