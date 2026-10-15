@@ -20,6 +20,7 @@ import {
   Link2,
   Compass,
   LogIn,
+  LogOut,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
@@ -44,6 +45,7 @@ function AccountPageContent() {
     syncNow,
     refreshWorkspace,
     setIsAuthModalOpen,
+    logout,
   } = useWedding();
 
   const [copiedCode, setCopiedCode] = useState(false);
@@ -53,6 +55,22 @@ function AccountPageContent() {
   const [unpairingLoading, setUnpairingLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    const isConfirmed = await showConfirmDialog({
+      title: "Keluar dari Akun?",
+      text: "Apakah Anda yakin ingin keluar? Seluruh rencana Anda tetap tersimpan aman di database cloud.",
+      confirmButtonText: "Ya, Keluar",
+      cancelButtonText: "Batal",
+      isDestructive: true,
+      icon: "warning",
+    });
+    if (!isConfirmed) return;
+    setIsLoggingOut(true);
+    showToastSuccess("Sedang keluar dari akun...");
+    await logout();
+  };
 
   // View mode: "landing" for guest landing page or "manage" for account & settings form
   const [viewMode, setViewMode] = useState<"landing" | "manage">(() => {
@@ -337,6 +355,19 @@ function AccountPageContent() {
             <Sparkles className="w-3.5 h-3.5 text-pastel-600" />
             <span>Showcase &amp; Testimoni</span>
           </button>
+
+          {currentUser && (
+            <button
+              type="button"
+              onClick={handleLogout}
+              disabled={isLoggingOut}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 font-bold text-xs shadow-2xs transition-colors disabled:opacity-50"
+              title="Keluar dari sesi akun ini"
+            >
+              <LogOut className="w-3.5 h-3.5 text-rose-600" />
+              <span>{isLoggingOut ? "Keluar..." : "Keluar Akun"}</span>
+            </button>
+          )}
 
           {/* Linked Couple Header Chip */}
           {wedding.isPartnerConnected && effectivePartner && (

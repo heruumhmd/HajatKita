@@ -21,9 +21,11 @@ import {
   HelpCircle,
   Menu,
   Activity,
+  LogOut,
 } from "lucide-react";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
 import { useWedding } from "@/context/wedding-context";
+import { showConfirmDialog, showToastSuccess } from "@/lib/swal";
 
 interface NavItem {
   label: string;
@@ -62,7 +64,21 @@ export function AppSidebar({
   onOpenMobileMenu,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const { wedding, currentUser } = useWedding();
+  const { wedding, currentUser, logout } = useWedding();
+
+  const handleLogout = async () => {
+    const isConfirmed = await showConfirmDialog({
+      title: "Keluar dari Akun?",
+      text: "Apakah Anda yakin ingin keluar? Seluruh rencana Anda tetap tersimpan aman di database cloud.",
+      confirmButtonText: "Ya, Keluar",
+      cancelButtonText: "Batal",
+      isDestructive: true,
+      icon: "warning",
+    });
+    if (!isConfirmed) return;
+    showToastSuccess("Sedang keluar dari akun...");
+    await logout();
+  };
 
   const effectivePartner = React.useMemo(() => {
     if (!wedding.isPartnerConnected) return null;
@@ -236,6 +252,18 @@ export function AppSidebar({
                 )}
               </div>
             </div>
+
+            {currentUser && (
+              <button
+                type="button"
+                onClick={handleLogout}
+                className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-slate-50 hover:bg-rose-50 border border-slate-200/80 hover:border-rose-200 text-slate-500 hover:text-rose-600 text-[11px] font-bold transition-all shadow-2xs"
+                title="Keluar dari sesi akun ini"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Keluar Akun</span>
+              </button>
+            )}
           </div>
         </div>
       </aside>

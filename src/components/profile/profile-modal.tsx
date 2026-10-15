@@ -67,18 +67,21 @@ export function ProfileModal() {
     }, 1200);
   };
 
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
   const handleLogout = async () => {
     const isConfirmed = await showConfirmDialog({
       title: "Keluar dari Akun?",
       text: "Apakah Anda yakin ingin keluar? Seluruh rencana Anda tetap tersimpan aman di database.",
       confirmButtonText: "Ya, Keluar",
       cancelButtonText: "Batal",
-      isDestructive: false,
-      icon: "question",
+      isDestructive: true,
+      icon: "warning",
     });
     if (!isConfirmed) return;
-    logout();
-    showToastSuccess("Berhasil keluar dari akun");
+    setIsLoggingOut(true);
+    showToastSuccess("Sedang keluar dari akun...");
+    await logout();
   };
 
   return (
@@ -295,10 +298,11 @@ export function ProfileModal() {
             <button
               type="button"
               onClick={handleLogout}
-              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors order-2 sm:order-1"
+              disabled={isLoggingOut}
+              className="inline-flex items-center justify-center gap-1.5 px-3 py-2.5 rounded-xl text-rose-600 hover:bg-rose-50 disabled:opacity-50 text-xs font-bold transition-colors order-2 sm:order-1"
             >
               <LogOut className="w-3.5 h-3.5 shrink-0" />
-              <span>Keluar Akun</span>
+              <span>{isLoggingOut ? "Keluar..." : "Keluar Akun"}</span>
             </button>
 
             <button

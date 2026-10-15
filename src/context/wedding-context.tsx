@@ -412,6 +412,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const inFlightRef = useRef(false);
   const dirtyAfterFlightRef = useRef(false);
   const latestPayloadRef = useRef<any>(null);
+  const isLoggingOutRef = useRef<boolean>(false);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -430,6 +431,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Sync NextAuth session with currentUser
   useEffect(() => {
+    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") {
+      return;
+    }
+    if (isLoggingOutRef.current) return;
+
     if (session?.user && session.user.email) {
       const sessionUser = session.user;
       const email = sessionUser.email!.toLowerCase().trim();
@@ -1205,6 +1211,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Auth Helpers
   const login = (userData: Partial<User>) => {
+    isLoggingOutRef.current = false;
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("HAJAT_LOGOUT_FLAG");
+      } catch (e) {}
+    }
+
     const userRole = userData.role || "GROOM";
     const user: User = {
       id: userData.id || `u-${crypto.randomUUID()}`,
@@ -1252,11 +1265,34 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loginWithGoogle = () => {
+    isLoggingOutRef.current = false;
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.removeItem("HAJAT_LOGOUT_FLAG");
+      } catch (e) {}
+    }
     const origin = typeof window !== "undefined" ? window.location.origin : "";
     signIn("google", { redirectTo: origin || "/", callbackUrl: origin || "/" });
   };
 
   const logout = async () => {
+    isLoggingOutRef.current = true;
+
+    // 1. Immediately cancel all pending autosaves & polling timers
+    if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+    if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+
+    // 2. Set explicit logout flag in sessionStorage to prevent lingering useSession re-population
+    if (typeof window !== "undefined") {
+      try {
+        sessionStorage.setItem("HAJAT_LOGOUT_FLAG", "true");
+        localStorage.removeItem(AUTH_STORAGE_KEY);
+        localStorage.removeItem(STORAGE_KEY);
+        localStorage.removeItem("hajat_workspace_token");
+        localStorage.removeItem("hajat_device_credential");
+      } catch (e) {}
+    }
+
     const activeUser = currentUserRef.current;
     if (activeUser) {
       const logoutLog: ActivityLog = {
@@ -1272,7 +1308,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         createdAt: new Date().toISOString(),
       };
 
-      // Persist logout event to shared database so partner / audit trail records it
+      // Persist logout event to shared database with AbortController timeout (max 1.2s)
       if (activeUser.email || (weddingRef.current.id && weddingRef.current.id !== "w-main")) {
         try {
           const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
@@ -1286,23 +1322,27 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             baseVersion: versionRef.current,
             user: activeUser,
           };
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 1200);
           await fetch("/api/wedding/sync", {
             method: "POST",
             headers,
             body: JSON.stringify(payloadWithLogout),
-          });
+            signal: controller.signal,
+          }).catch(() => {});
+          clearTimeout(timeoutId);
         } catch (e) {
           console.warn("Could not sync logout activity", e);
         }
       }
     }
 
+    // 3. Clear currentUser and close any open modals
     setCurrentUser(null);
-    localStorage.removeItem(AUTH_STORAGE_KEY);
-    localStorage.removeItem(STORAGE_KEY);
     setIsProfileModalOpen(false);
+    setIsAuthModalOpen(false);
 
-    // Reset workspace state to clean empty defaults
+    // 4. Reset workspace state to clean empty defaults
     setWedding(cleanEmptyWedding);
     setSavingContributions([]);
     setChecklist([]);
@@ -1319,7 +1359,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     deletedItemIdsRef.current.clear();
     setDeletedItemIds([]);
 
-    // Reset sync refs
+    // 5. Reset sync refs
     hasLoadedRemoteRef.current = false;
     lastServerHashRef.current = "";
     versionRef.current = 0;
@@ -1328,10 +1368,24 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     inFlightRef.current = false;
     dirtyAfterFlightRef.current = false;
 
+    // 6. Explicitly expire session cookies client-side
     try {
-      await signOut({ redirect: false });
+      document.cookie = "authjs.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      document.cookie = "__Secure-authjs.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure";
+      document.cookie = "__Host-authjs.csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure";
+      document.cookie = "authjs.csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    } catch {}
+
+    // 7. Invoke NextAuth signOut to destroy server session
+    try {
+      await signOut({ callbackUrl: "/account?tab=landing", redirect: false });
     } catch (e) {
-      console.error("SignOut error", e);
+      console.warn("SignOut error", e);
+    }
+
+    // 8. Hard browser navigation to completely dump in-memory caches, router cache, and react context
+    if (typeof window !== "undefined") {
+      window.location.href = "/account?tab=landing";
     }
   };
 
