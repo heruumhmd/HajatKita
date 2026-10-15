@@ -1,3 +1,8 @@
+// IMPORTANT DEPLOYMENT PREREQUISITE:
+// Ensure Neon database migration has been run before deploying:
+// ALTER TABLE weddings ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0;
+// Otherwise, queries selecting or updating `version` will fail with 500 error.
+
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
@@ -324,7 +329,23 @@ export async function POST(req: NextRequest) {
     }
 
     const clientIp = getClientIp(req);
-    const body = await req.json();
+    const rawBody = await req.text();
+    let body: any;
+    try {
+      body = JSON.parse(rawBody);
+    } catch {
+      return NextResponse.json({ success: false, message: "Format JSON tidak valid" }, { status: 400 });
+    }
+
+    // Enforce 10KB payload limit for public unauthenticated endpoints
+    if (body?.action === "RSVP" || body?.action === "CLAIM_GIFT") {
+      if (rawBody.length > 10 * 1024) {
+        return NextResponse.json(
+          { success: false, message: "Ukuran permintaan melebihi batas maksimal (10KB)" },
+          { status: 413 }
+        );
+      }
+    }
 
     // 1. Special Action: RSVP from Public Digital Invitation
     if (body.action === "RSVP") {
@@ -643,20 +664,20 @@ export async function POST(req: NextRequest) {
 
       const updateResult = await sql`
         UPDATE weddings SET
-          title = ${wedding?.title || existingWedding.title || "Pernikahan Kita"},
+          title = ${wedding?.title !== undefined ? (wedding.title || "Pernikahan Kita") : (existingWedding.title || "Pernikahan Kita")},
           groom_name = COALESCE(NULLIF(${wedding?.groomName || ""}, ''), groom_name),
           bride_name = COALESCE(NULLIF(${wedding?.brideName || ""}, ''), bride_name),
-          wedding_date = COALESCE(${validWeddingDate}, wedding_date),
-          city = COALESCE(NULLIF(${wedding?.city || ""}, ''), city),
+          wedding_date = ${wedding?.weddingDate !== undefined ? validWeddingDate : existingWedding.wedding_date},
+          city = ${wedding?.city !== undefined ? (wedding.city || null) : existingWedding.city},
           target_budget = ${wedding?.targetBudget !== undefined ? wedding.targetBudget : existingWedding.target_budget},
           current_savings = ${wedding?.currentSavings !== undefined ? wedding.currentSavings : existingWedding.current_savings},
-          slug = COALESCE(NULLIF(${wedding?.slug || ""}, ''), slug),
-          venue_name = COALESCE(NULLIF(${wedding?.venueName || ""}, ''), venue_name),
-          venue_address = COALESCE(NULLIF(${wedding?.venueAddress || ""}, ''), venue_address),
-          mahar_details = COALESCE(NULLIF(${wedding?.maharDetails || ""}, ''), mahar_details),
-          wali_nikah = COALESCE(NULLIF(${wedding?.waliNikah || ""}, ''), wali_nikah),
-          penghulu = COALESCE(NULLIF(${wedding?.penghulu || ""}, ''), penghulu),
-          saksi_nikah = COALESCE(NULLIF(${wedding?.saksiNikah || ""}, ''), saksi_nikah),
+          slug = ${wedding?.slug !== undefined ? (wedding.slug || null) : existingWedding.slug},
+          venue_name = ${wedding?.venueName !== undefined ? (wedding.venueName || null) : existingWedding.venue_name},
+          venue_address = ${wedding?.venueAddress !== undefined ? (wedding.venueAddress || null) : existingWedding.venue_address},
+          mahar_details = ${wedding?.maharDetails !== undefined ? (wedding.maharDetails || null) : existingWedding.mahar_details},
+          wali_nikah = ${wedding?.waliNikah !== undefined ? (wedding.waliNikah || null) : existingWedding.wali_nikah},
+          penghulu = ${wedding?.penghulu !== undefined ? (wedding.penghulu || null) : existingWedding.penghulu},
+          saksi_nikah = ${wedding?.saksiNikah !== undefined ? (wedding.saksiNikah || null) : existingWedding.saksi_nikah},
           is_partner_connected = ${Boolean(isPartnerConnected)},
           partner_name = ${resolvedPartnerName},
           partner_email = ${partnerEmail},
