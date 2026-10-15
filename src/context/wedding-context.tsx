@@ -1493,7 +1493,18 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setAlignmentTopics([]);
     setAdminSteps(officialAdminSteps.map((s) => ({ ...s, requirements: s.requirements.map((r) => ({ ...r, isDone: false })) })));
     setActivityLogs([]);
-    setWedding(cleanEmptyWedding);
+    setWedding((prev) => ({
+      ...cleanEmptyWedding,
+      id: prev.id,
+      inviteCode: prev.inviteCode,
+      slug: prev.slug,
+      isPartnerConnected: prev.isPartnerConnected,
+      partnerInfo: prev.partnerInfo,
+      couple: prev.couple,
+      primaryUserEmail: prev.primaryUserEmail,
+      partnerUserEmail: prev.partnerUserEmail,
+      version: prev.version,
+    }));
     localStorage.removeItem(STORAGE_KEY);
     addActivity(currentUser?.name || "Pengguna", currentUser?.role || "GROOM", "Mengosongkan seluruh data rencana pernikahan");
   };

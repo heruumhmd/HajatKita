@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Gem, Utensils, Users, AlertTriangle, ShieldCheck, Heart, Sparkles, Edit2, Check } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { showToastSuccess } from "@/lib/swal";
@@ -14,6 +14,15 @@ export default function CeremonyPage() {
   const [wali, setWali] = useState(wedding.waliNikah || "");
   const [penghulu, setPenghulu] = useState(wedding.penghulu || "");
   const [saksi, setSaksi] = useState(wedding.saksiNikah || "");
+
+  useEffect(() => {
+    if (!isEditingCeremony) {
+      setMahar(wedding.maharDetails || "");
+      setWali(wedding.waliNikah || "");
+      setPenghulu(wedding.penghulu || "");
+      setSaksi(wedding.saksiNikah || "");
+    }
+  }, [wedding.maharDetails, wedding.waliNikah, wedding.penghulu, wedding.saksiNikah, isEditingCeremony]);
 
   // Catering buffer algorithm state
   const [invitationsCount, setInvitationsCount] = useState(300);
