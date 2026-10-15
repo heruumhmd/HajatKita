@@ -201,7 +201,7 @@ export default function CeremonyPage() {
               <input
                 type="number"
                 value={invitationsCount}
-                onChange={(e) => setInvitationsCount(parseInt(e.target.value, 10) || 0)}
+                onChange={(e) => setInvitationsCount(Math.max(0, parseInt(e.target.value, 10) || 0))}
                 className="w-32 text-lg font-black font-mono bg-white border border-slate-300 rounded-xl px-3 py-2 text-slate-900"
               />
               <span className="text-xs text-slate-500">Undangan (Fisik / Digital)</span>

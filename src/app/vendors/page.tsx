@@ -85,7 +85,7 @@ export default function VendorsPage() {
     if (!requireAuth()) return;
     if (!vendorName.trim()) return;
 
-    const contractNum = parseFloat(totalContract) || 0;
+    const contractNum = Math.max(0, parseFloat(totalContract) || 0);
 
     if (editingVendor) {
       const updatedStages = editingVendor.stages.map((stage) => ({

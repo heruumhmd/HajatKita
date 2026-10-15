@@ -122,26 +122,29 @@ function GuestsContent() {
 
   const handleSaveGuest = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth()) return;
     if (!name.trim()) return;
+
+    const safePax = Math.max(1, pax || 1);
 
     if (editingGuest) {
       editGuest({
         ...editingGuest,
-        name,
-        phone,
+        name: name.trim(),
+        phone: phone.trim() || "-",
         side,
         category,
-        pax,
+        pax: safePax,
         rsvpStatus,
       });
       showToastSuccess(`Data tamu "${name}" berhasil diperbarui! ✨`);
     } else {
       addGuest({
-        name,
-        phone: phone || "-",
+        name: name.trim(),
+        phone: phone.trim() || "-",
         side,
         category,
-        pax,
+        pax: safePax,
         rsvpStatus,
       });
       showToastSuccess(`Tamu "${name}" berhasil ditambahkan! 👥`);
@@ -164,9 +167,10 @@ function GuestsContent() {
 
   const handleSaveEnvelope = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth()) return;
     if (!recordingEnvelopeId) return;
-    const amount = parseFloat(envelopeInput) || 0;
-    recordEnvelope(recordingEnvelopeId, amount, giftInput);
+    const amount = Math.max(0, parseFloat(envelopeInput) || 0);
+    recordEnvelope(recordingEnvelopeId, amount, giftInput.trim());
     showToastSuccess("Catatan amplop & kado berhasil disimpan! 💌");
     setRecordingEnvelopeId(null);
     setEnvelopeInput("");
@@ -443,10 +447,12 @@ function GuestsContent() {
               </label>
               <input
                 type="number"
+                min="0"
                 value={familyQuota.groomQuota}
-                onChange={(e) =>
-                  updateFamilyQuota({ groomQuota: parseInt(e.target.value, 10) || 0 })
-                }
+                onChange={(e) => {
+                  if (!requireAuth()) return;
+                  updateFamilyQuota({ groomQuota: Math.max(0, parseInt(e.target.value, 10) || 0) });
+                }}
                 className="w-full text-base font-black font-mono bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
               />
               <span className="text-[11px] text-slate-400">Porsi Calon Pria</span>
@@ -458,10 +464,12 @@ function GuestsContent() {
               </label>
               <input
                 type="number"
+                min="0"
                 value={familyQuota.brideQuota}
-                onChange={(e) =>
-                  updateFamilyQuota({ brideQuota: parseInt(e.target.value, 10) || 0 })
-                }
+                onChange={(e) => {
+                  if (!requireAuth()) return;
+                  updateFamilyQuota({ brideQuota: Math.max(0, parseInt(e.target.value, 10) || 0) });
+                }}
                 className="w-full text-base font-black font-mono bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
               />
               <span className="text-[11px] text-slate-400">Porsi Calon Wanita</span>
@@ -473,10 +481,12 @@ function GuestsContent() {
               </label>
               <input
                 type="number"
+                min="0"
                 value={familyQuota.groomParentsQuota}
-                onChange={(e) =>
-                  updateFamilyQuota({ groomParentsQuota: parseInt(e.target.value, 10) || 0 })
-                }
+                onChange={(e) => {
+                  if (!requireAuth()) return;
+                  updateFamilyQuota({ groomParentsQuota: Math.max(0, parseInt(e.target.value, 10) || 0) });
+                }}
                 className="w-full text-base font-black font-mono bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
               />
               <span className="text-[11px] text-slate-400">Relasi Ortu Suami</span>
@@ -488,10 +498,12 @@ function GuestsContent() {
               </label>
               <input
                 type="number"
+                min="0"
                 value={familyQuota.brideParentsQuota}
-                onChange={(e) =>
-                  updateFamilyQuota({ brideParentsQuota: parseInt(e.target.value, 10) || 0 })
-                }
+                onChange={(e) => {
+                  if (!requireAuth()) return;
+                  updateFamilyQuota({ brideParentsQuota: Math.max(0, parseInt(e.target.value, 10) || 0) });
+                }}
                 className="w-full text-base font-black font-mono bg-white border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
               />
               <span className="text-[11px] text-slate-400">Relasi Ortu Istri</span>
@@ -511,8 +523,12 @@ function GuestsContent() {
                 <span className="text-xs text-slate-500 font-semibold block">Estimasi Biaya per Pax:</span>
                 <input
                   type="number"
+                  min="0"
                   value={costPerPax}
-                  onChange={(e) => updateFamilyQuota({ costPerPax: parseInt(e.target.value, 10) || 0 })}
+                  onChange={(e) => {
+                    if (!requireAuth()) return;
+                    updateFamilyQuota({ costPerPax: Math.max(0, parseInt(e.target.value, 10) || 0) });
+                  }}
                   className="text-xs font-mono font-bold bg-white border border-slate-200 rounded-lg px-2.5 py-1 text-slate-900 mt-1"
                 />
               </div>

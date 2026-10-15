@@ -20,6 +20,10 @@ export function CountdownCard() {
     }
 
     const target = new Date(wedding.weddingDate).getTime();
+    if (isNaN(target)) {
+      setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+      return;
+    }
 
     const updateCountdown = () => {
       const now = new Date().getTime();

@@ -69,33 +69,36 @@ export default function BudgetPage() {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const allocatedNum = parseFloat(allocated) || 0;
-    const spentNum = parseFloat(spent) || 0;
+    const allocatedNum = Math.max(0, parseFloat(allocated) || 0);
+    const spentNum = Math.max(0, parseFloat(spent) || 0);
 
-    let computedStatus = status;
-    if (spentNum >= allocatedNum && allocatedNum > 0) {
-      computedStatus = "LUNAS";
-    } else if (spentNum > 0) {
-      computedStatus = "DP_TERBAYAR";
+    // Respect user's selected status; auto-suggest only if left as BELUM_BAYAR with spent > 0
+    let finalStatus = status;
+    if (status === "BELUM_BAYAR" && spentNum > 0) {
+      if (allocatedNum > 0 && spentNum >= allocatedNum) {
+        finalStatus = "LUNAS";
+      } else {
+        finalStatus = "DP_TERBAYAR";
+      }
     }
 
     if (editingItem) {
       updateBudgetCategory({
         ...editingItem,
-        name,
-        vendor: vendor || undefined,
+        name: name.trim(),
+        vendor: vendor.trim() || undefined,
         allocated: allocatedNum,
         spent: spentNum,
-        status: computedStatus,
+        status: finalStatus,
       });
       showToastSuccess(`Pos anggaran "${name}" berhasil diperbarui! 💳`);
     } else {
       addBudgetCategory({
-        name,
-        vendor: vendor || undefined,
+        name: name.trim(),
+        vendor: vendor.trim() || undefined,
         allocated: allocatedNum,
         spent: spentNum,
-        status: computedStatus,
+        status: finalStatus,
       });
       showToastSuccess(`Pos anggaran "${name}" berhasil ditambahkan! 📊`);
     }

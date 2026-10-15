@@ -87,29 +87,39 @@ export default function PostWeddingPage() {
     setIsModalOpen(true);
   };
 
+  const sanitizeUrl = (url: string) => {
+    const trimmed = (url || "").trim();
+    if (!trimmed) return "";
+    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
+  };
+
   const handleSaveItem = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
 
-    const priceNum = parseFloat(price) || 0;
+    const priceNum = Math.max(0, parseFloat(price) || 0);
+    const cleanUrl = sanitizeUrl(purchaseUrl);
+
     if (editingItem) {
       editPostWedding({
         ...editingItem,
-        name,
+        name: name.trim(),
         roomCategory,
-        brand: brand || "Generic",
+        brand: brand.trim() || "Generic",
         price: priceNum,
-        purchaseUrl: purchaseUrl || "https://tokopedia.com",
+        purchaseUrl: cleanUrl,
         priority,
       });
       showToastSuccess(`Wishlist "${name}" berhasil diperbarui! 🏠`);
     } else {
       addPostWedding({
-        name,
+        name: name.trim(),
         roomCategory,
-        brand: brand || "Generic",
+        brand: brand.trim() || "Generic",
         price: priceNum,
-        purchaseUrl: purchaseUrl || "https://tokopedia.com",
+        purchaseUrl: cleanUrl,
         priority,
         isAcquired: false,
         isGiftClaimable: true,

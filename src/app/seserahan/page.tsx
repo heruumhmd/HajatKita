@@ -81,22 +81,31 @@ export default function SeserahanPage() {
     setIsModalOpen(true);
   };
 
+  const sanitizeUrl = (url: string) => {
+    const trimmed = (url || "").trim();
+    if (!trimmed) return "";
+    return trimmed.startsWith("http://") || trimmed.startsWith("https://")
+      ? trimmed
+      : `https://${trimmed}`;
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newItemName.trim()) return;
 
-    const priceNum = parseFloat(newPrice) || 0;
+    const priceNum = Math.max(0, parseFloat(newPrice) || 0);
+    const cleanUrl = sanitizeUrl(newUrl);
 
     if (editingItem) {
       editSeserahan({
         ...editingItem,
         boxNumber: newBoxNumber,
         boxName: boxNames[newBoxNumber] || `Kotak ${newBoxNumber}`,
-        name: newItemName,
-        brand: newBrand || "Custom",
+        name: newItemName.trim(),
+        brand: newBrand.trim() || "Custom",
         category: newCategory,
         estimatedPrice: priceNum,
-        purchaseUrl: newUrl || "https://shopee.co.id",
+        purchaseUrl: cleanUrl,
         notes: newNotes,
       });
       showToastSuccess(`Barang "${newItemName}" berhasil diperbarui! 🎁`);
@@ -104,11 +113,11 @@ export default function SeserahanPage() {
       addSeserahan({
         boxNumber: newBoxNumber,
         boxName: boxNames[newBoxNumber] || `Kotak ${newBoxNumber}`,
-        name: newItemName,
-        brand: newBrand || "Custom",
+        name: newItemName.trim(),
+        brand: newBrand.trim() || "Custom",
         category: newCategory,
         estimatedPrice: priceNum,
-        purchaseUrl: newUrl || "https://shopee.co.id",
+        purchaseUrl: cleanUrl,
         isPurchased: false,
         notes: newNotes,
       });
