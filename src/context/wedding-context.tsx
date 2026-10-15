@@ -321,6 +321,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const retryCountRef = useRef(0);
   const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const saveFailedToastShownRef = useRef(false);
+  const inFlightRef = useRef(false);
+  const dirtyAfterFlightRef = useRef(false);
+  const latestPayloadRef = useRef<any>(null);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -394,11 +397,14 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     activityLogs,
   ]);
 
+  // Keep latest payload ref always updated with latest state
+  latestPayloadRef.current = buildPlanPayload();
+
   // Load from Database whenever user logs in or polls
   const fetchDbData = useCallback(async (email?: string, code?: string, force = false) => {
     if (!force) {
-      // Skip polling while a save is in progress or waiting
-      if (pendingSaveRef.current || saveTimeoutRef.current !== null) return;
+      // Skip polling while a save is in progress, in flight, or waiting
+      if (pendingSaveRef.current || inFlightRef.current || saveTimeoutRef.current !== null) return;
       // Skip polling if there are unsaved local modifications
       const currentPayload = buildPlanPayload();
       const currentHash = hashPayload(currentPayload);
@@ -721,6 +727,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       return;
     }
 
+    // If a save is currently in-flight, mark dirty queue so it saves again after completion
+    if (inFlightRef.current) {
+      dirtyAfterFlightRef.current = true;
+    }
+
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -732,14 +743,30 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     pendingSaveRef.current = true;
     saveTimeoutRef.current = setTimeout(async () => {
       const executeSave = async (attempt = 0) => {
+        if (inFlightRef.current) {
+          dirtyAfterFlightRef.current = true;
+          return;
+        }
+
+        const payloadToSave = latestPayloadRef.current || buildPlanPayload();
+        const currentHash = hashPayload(payloadToSave);
+        if (lastServerHashRef.current !== "" && currentHash === lastServerHashRef.current) {
+          pendingSaveRef.current = false;
+          return;
+        }
+
+        inFlightRef.current = true;
+        const activeUser = currentUserRef.current;
+        const sentVersion = versionRef.current;
+
         try {
           const res = await fetch("/api/wedding/sync", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
-              ...currentPayload,
-              baseVersion: versionRef.current,
-              user: currentUser,
+              ...payloadToSave,
+              baseVersion: sentVersion,
+              user: activeUser,
             }),
           });
           const resData = await res.json();
@@ -749,14 +776,20 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             saveFailedRef.current = false;
             retryCountRef.current = 0;
             saveFailedToastShownRef.current = false;
+            const isTrueConflict = sentVersion === versionRef.current;
             if (typeof resData.version === "number") {
               versionRef.current = resData.version;
             }
-            showToastWarning(
-              "Data Diperbarui",
-              "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
-            );
-            await fetchDbData(currentUser?.email, wedding.inviteCode, true);
+            if (isTrueConflict) {
+              showToastWarning(
+                "Data Diperbarui",
+                "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
+              );
+              await fetchDbData(activeUser?.email, weddingRef.current.inviteCode, true);
+            } else {
+              // Self-conflict: version was already bumped locally, flag dirty to save with latest state
+              dirtyAfterFlightRef.current = true;
+            }
             return;
           }
 
@@ -775,7 +808,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             if (resData.weddingId) {
               setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
             }
-            lastServerHashRef.current = hashPayload(currentPayload);
+            lastServerHashRef.current = hashPayload(payloadToSave);
           } else {
             console.warn("Auto-save returned error from server:", resData?.error || resData?.message);
             triggerRetry(attempt);
@@ -784,9 +817,18 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           console.warn("Auto-save to database deferred", e);
           triggerRetry(attempt);
         } finally {
+          inFlightRef.current = false;
           saveTimeoutRef.current = null;
           // Allow polling to resume after save completes
           setTimeout(() => { pendingSaveRef.current = false; }, 800);
+          if (dirtyAfterFlightRef.current) {
+            dirtyAfterFlightRef.current = false;
+            const nextPayload = latestPayloadRef.current || buildPlanPayload();
+            const nextHash = hashPayload(nextPayload);
+            if (nextHash !== lastServerHashRef.current) {
+              executeSave(0);
+            }
+          }
         }
       };
 
@@ -798,7 +840,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           retryCountRef.current = nextAttempt;
           const delay = backoffs[attempt];
           retryTimeoutRef.current = setTimeout(() => {
-            const latestPayload = buildPlanPayload();
+            if (inFlightRef.current) {
+              dirtyAfterFlightRef.current = true;
+              return;
+            }
+            const latestPayload = latestPayloadRef.current || buildPlanPayload();
             const latestHash = hashPayload(latestPayload);
             if (latestHash !== lastServerHashRef.current) {
               executeSave(nextAttempt);
