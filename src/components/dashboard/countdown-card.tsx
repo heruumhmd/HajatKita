@@ -19,7 +19,8 @@ export function CountdownCard() {
       return;
     }
 
-    const target = new Date(wedding.weddingDate).getTime();
+    const dateStr = wedding.weddingDate.trim();
+    const target = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00`).getTime();
     if (isNaN(target)) {
       setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
       return;

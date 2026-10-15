@@ -32,6 +32,7 @@ export default function VendorsPage() {
   const [totalContract, setTotalContract] = useState("");
   const [contactPerson, setContactPerson] = useState("");
   const [contactPhone, setContactPhone] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleOpenAddVendor = () => {
     if (!requireAuth()) return;
@@ -57,6 +58,7 @@ export default function VendorsPage() {
 
   const handleToggleStage = (vendor: VendorMilestone, stageIndex: number) => {
     if (!requireAuth()) return;
+    if (!Array.isArray(vendor.stages) || !vendor.stages[stageIndex]) return;
     const stage = vendor.stages[stageIndex];
     toggleVendorStage(vendor.id, stageIndex);
     const willBePaid = !stage.isPaid;
@@ -82,25 +84,55 @@ export default function VendorsPage() {
 
   const handleSaveVendor = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!requireAuth()) return;
     if (!vendorName.trim()) return;
 
-    const contractNum = Math.max(0, parseFloat(totalContract) || 0);
+    setIsSubmitting(true);
+    try {
+      const contractNum = Math.max(0, parseFloat(totalContract) || 0);
 
-    if (editingVendor) {
-      const updatedStages = editingVendor.stages.map((stage) => ({
-        ...stage,
-        amount: Math.round(contractNum * (stage.percentage / 100)),
-      }));
+      if (editingVendor) {
+        const updatedStages = editingVendor.stages.map((stage) => ({
+          ...stage,
+          amount: Math.round(contractNum * (stage.percentage / 100)),
+        }));
 
-      editVendor({
-        ...editingVendor,
-        vendorName,
-        serviceType,
-        totalContract: contractNum,
-        contactPerson,
-        contactPhone,
-        stages: updatedStages.length > 0 ? updatedStages : [
+        editVendor({
+          ...editingVendor,
+          vendorName,
+          serviceType,
+          totalContract: contractNum,
+          contactPerson,
+          contactPhone,
+          stages: updatedStages.length > 0 ? updatedStages : [
+            {
+              name: "DP Booking Tanggal (20%)",
+              percentage: 20,
+              amount: Math.round(contractNum * 0.2),
+              isPaid: false,
+              condition: "Menerima kwitansi & surat lock tanggal resmi",
+            },
+            {
+              name: "Termin 2 / Technical Meeting (40%)",
+              percentage: 40,
+              amount: Math.round(contractNum * 0.4),
+              isPaid: false,
+              condition: "Layout panggung / food testing / fitting disetujui",
+            },
+            {
+              name: "Pelunasan Pasca-Acara H+1 (40%)",
+              percentage: 40,
+              amount: Math.round(contractNum * 0.4),
+              isPaid: false,
+              condition: "Setelah pekerjaan selesai memuaskan di hari H",
+            },
+          ],
+        });
+        showToastSuccess(`Kontrak vendor "${vendorName}" berhasil diperbarui! 🤝`);
+      } else {
+        // Default safe Indonesian wedding payment milestones
+        const defaultStages = [
           {
             name: "DP Booking Tanggal (20%)",
             percentage: 20,
@@ -122,52 +154,28 @@ export default function VendorsPage() {
             isPaid: false,
             condition: "Setelah pekerjaan selesai memuaskan di hari H",
           },
-        ],
-      });
-      showToastSuccess(`Kontrak vendor "${vendorName}" berhasil diperbarui! 🤝`);
-    } else {
-      // Default safe Indonesian wedding payment milestones
-      const defaultStages = [
-        {
-          name: "DP Booking Tanggal (20%)",
-          percentage: 20,
-          amount: Math.round(contractNum * 0.2),
-          isPaid: false,
-          condition: "Menerima kwitansi & surat lock tanggal resmi",
-        },
-        {
-          name: "Termin 2 / Technical Meeting (40%)",
-          percentage: 40,
-          amount: Math.round(contractNum * 0.4),
-          isPaid: false,
-          condition: "Layout panggung / food testing / fitting disetujui",
-        },
-        {
-          name: "Pelunasan Pasca-Acara H+1 (40%)",
-          percentage: 40,
-          amount: Math.round(contractNum * 0.4),
-          isPaid: false,
-          condition: "Setelah pekerjaan selesai memuaskan di hari H",
-        },
-      ];
+        ];
 
-      addVendor({
-        vendorName,
-        serviceType,
-        totalContract: contractNum,
-        contactPerson,
-        contactPhone,
-        stages: defaultStages,
-      });
-      showToastSuccess(`Vendor "${vendorName}" berhasil didaftarkan! 📝`);
+        addVendor({
+          vendorName,
+          serviceType,
+          totalContract: contractNum,
+          contactPerson,
+          contactPhone,
+          stages: defaultStages,
+        });
+        showToastSuccess(`Vendor "${vendorName}" berhasil didaftarkan! 📝`);
+      }
+
+      setIsModalOpen(false);
+      setEditingVendor(null);
+      setVendorName("");
+      setTotalContract("");
+      setContactPerson("");
+      setContactPhone("");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    setIsModalOpen(false);
-    setEditingVendor(null);
-    setVendorName("");
-    setTotalContract("");
-    setContactPerson("");
-    setContactPhone("");
   };
 
   const totalContractAll = vendors.reduce((acc, curr) => acc + curr.totalContract, 0);
@@ -480,9 +488,10 @@ export default function VendorsPage() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 disabled:opacity-50 text-white shadow-xs"
                 >
-                  {editingVendor ? "Simpan Perubahan" : "Simpan Vendor"}
+                  {isSubmitting ? "Menyimpan..." : (editingVendor ? "Simpan Perubahan" : "Simpan Vendor")}
                 </button>
               </div>
             </form>

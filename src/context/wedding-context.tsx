@@ -1025,7 +1025,33 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const logout = async () => {
     setCurrentUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
+    localStorage.removeItem(STORAGE_KEY);
     setIsProfileModalOpen(false);
+
+    // Reset workspace state to clean empty defaults
+    setWedding(cleanEmptyWedding);
+    setSavingContributions([]);
+    setChecklist([]);
+    setSeserahan([]);
+    setPostWedding([]);
+    setGuests([]);
+    setFamilyQuota(defaultFamilyQuota);
+    setRundown([]);
+    setBudgetCategories([]);
+    setVendors([]);
+    setAlignmentTopics([]);
+    setAdminSteps(officialAdminSteps);
+    setActivityLogs([]);
+
+    // Reset sync refs
+    hasLoadedRemoteRef.current = false;
+    lastServerHashRef.current = "";
+    versionRef.current = 0;
+    retryCountRef.current = 0;
+    saveFailedRef.current = false;
+    inFlightRef.current = false;
+    dirtyAfterFlightRef.current = false;
+
     try {
       await signOut({ redirect: false });
     } catch (e) {

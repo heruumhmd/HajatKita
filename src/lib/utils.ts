@@ -27,9 +27,13 @@ export function formatShortRupiah(amount: number): string {
 }
 
 export function calculateDaysRemaining(targetDate: string): number {
-  const target = new Date(targetDate);
+  if (!targetDate) return 0;
+  const dateStr = targetDate.trim();
+  const target = new Date(dateStr.includes("T") ? dateStr : `${dateStr}T00:00:00`);
+  if (isNaN(target.getTime())) return 0;
   const now = new Date();
-  const diffTime = target.getTime() - now.getTime();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const diffTime = target.getTime() - todayMidnight.getTime();
   const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
   return diffDays > 0 ? diffDays : 0;
 }

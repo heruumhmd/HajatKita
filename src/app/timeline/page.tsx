@@ -69,6 +69,7 @@ export default function TimelinePage() {
 
   const handleSaveTask = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth()) return;
     if (!title.trim()) return;
 
     if (editingItem) {

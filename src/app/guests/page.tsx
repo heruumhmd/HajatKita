@@ -59,6 +59,7 @@ function GuestsContent() {
   const [category, setCategory] = useState("Sahabat");
   const [pax, setPax] = useState(2);
   const [rsvpStatus, setRsvpStatus] = useState<RSVPStatus>("PENDING");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Sync tab with URL
   const switchTab = (tab: "GUESTS" | "QUOTA" | "AMPLOP_LEDGER") => {
@@ -122,34 +123,40 @@ function GuestsContent() {
 
   const handleSaveGuest = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isSubmitting) return;
     if (!requireAuth()) return;
     if (!name.trim()) return;
 
-    const safePax = Math.max(1, pax || 1);
+    setIsSubmitting(true);
+    try {
+      const safePax = Math.max(1, pax || 1);
 
-    if (editingGuest) {
-      editGuest({
-        ...editingGuest,
-        name: name.trim(),
-        phone: phone.trim() || "-",
-        side,
-        category,
-        pax: safePax,
-        rsvpStatus,
-      });
-      showToastSuccess(`Data tamu "${name}" berhasil diperbarui! ✨`);
-    } else {
-      addGuest({
-        name: name.trim(),
-        phone: phone.trim() || "-",
-        side,
-        category,
-        pax: safePax,
-        rsvpStatus,
-      });
-      showToastSuccess(`Tamu "${name}" berhasil ditambahkan! 👥`);
+      if (editingGuest) {
+        editGuest({
+          ...editingGuest,
+          name: name.trim(),
+          phone: phone.trim() || "-",
+          side,
+          category,
+          pax: safePax,
+          rsvpStatus,
+        });
+        showToastSuccess(`Data tamu "${name}" berhasil diperbarui! ✨`);
+      } else {
+        addGuest({
+          name: name.trim(),
+          phone: phone.trim() || "-",
+          side,
+          category,
+          pax: safePax,
+          rsvpStatus,
+        });
+        showToastSuccess(`Tamu "${name}" berhasil ditambahkan! 👥`);
+      }
+      setIsAddModalOpen(false);
+    } finally {
+      setIsSubmitting(false);
     }
-    setIsAddModalOpen(false);
   };
 
   const handleDeleteGuest = async (guest: GuestItem) => {
@@ -786,9 +793,10 @@ function GuestsContent() {
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
+                  disabled={isSubmitting}
+                  className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 disabled:opacity-50 text-white shadow-xs"
                 >
-                  {editingGuest ? "Simpan Perubahan" : "Tambah Tamu"}
+                  {isSubmitting ? "Menyimpan..." : (editingGuest ? "Simpan Perubahan" : "Tambah Tamu")}
                 </button>
               </div>
             </form>

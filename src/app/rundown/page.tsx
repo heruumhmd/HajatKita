@@ -22,9 +22,9 @@ export default function RundownPage() {
   const [location, setLocation] = useState("");
   const [phase, setPhase] = useState<RundownItem["phase"]>("Akad Nikah");
 
-  const filteredItems = rundown.filter(
-    (i) => filterPhase === "ALL" || i.phase === filterPhase
-  );
+  const filteredItems = rundown
+    .filter((i) => filterPhase === "ALL" || i.phase === filterPhase)
+    .sort((a, b) => (a.startTime || "").localeCompare(b.startTime || ""));
 
   const formatTime = (timeStr: string) => {
     const trimmed = (timeStr || "").trim();
@@ -66,6 +66,7 @@ export default function RundownPage() {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!requireAuth()) return;
     if (!activity.trim()) return;
 
     const formattedStart = formatTime(startTime);

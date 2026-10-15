@@ -498,10 +498,20 @@ export async function POST(req: NextRequest) {
         }
 
         const postWedding = Array.isArray(planData.postWedding) ? planData.postWedding : [];
-        let claimedItemName = "Kado";
+        const targetItem = postWedding.find((item: any) => item.id === itemId);
+        if (!targetItem) {
+          return NextResponse.json({ success: false, message: "Kado tidak ditemukan dalam wishlist." }, { status: 404 });
+        }
+        if (targetItem.isAcquired || targetItem.claimedBy) {
+          return NextResponse.json(
+            { success: false, message: `Kado "${targetItem.name}" sudah dihadiahkan oleh rekan lain (${targetItem.claimedBy || "Sudah Dihadiahi"}).` },
+            { status: 409 }
+          );
+        }
+
+        const claimedItemName = targetItem.name || "Kado";
         const updatedPostWedding = postWedding.map((item: any) => {
           if (item.id === itemId) {
-            claimedItemName = item.name;
             return { ...item, isAcquired: true, claimedBy: friendName.trim() };
           }
           return item;

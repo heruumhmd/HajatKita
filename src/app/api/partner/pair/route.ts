@@ -64,6 +64,15 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Prevent partner hijacking: check if the target workspace already has another active partner
+    const existingPartnerEmail = (targetWedding.partner_user_email || targetWedding.partner_email || "").toLowerCase().trim();
+    if (targetWedding.is_partner_connected && existingPartnerEmail && existingPartnerEmail !== cleanUserEmail) {
+      return NextResponse.json(
+        { success: false, message: "Workspace pernikahan ini sudah terhubung dengan pasangan lain. Harap minta pemilik membatalkan pasangan sebelumnya terlebih dahulu." },
+        { status: 400 }
+      );
+    }
+
     // 2. Check couple history between cleanUserEmail and targetOwnerEmail
     let historicalWedding = null;
     let coupleRecord = null;
