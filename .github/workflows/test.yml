@@ -1,0 +1,85 @@
+name: Comprehensive Automated Test Suite
+
+on:
+  push:
+    branches: ["main", "test/**"]
+  pull_request:
+    branches: ["main"]
+
+jobs:
+  unit-and-static:
+    name: Unit & Static Code Quality
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Unit Tests
+        run: npm run test:unit
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'test-ci-auth-secret-key-at-least-32-chars-long' }}
+
+      - name: Run Static Checks & Secret Scanner
+        run: npm run test:static
+
+  api-security:
+    name: API Security Specifications
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run API Security Tests
+        run: npm run test:api
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'test-ci-auth-secret-key-at-least-32-chars-long' }}
+
+  e2e:
+    name: End-to-End Viewport & Accessibility Tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Install Playwright Browsers
+        run: npx playwright install chromium --with-deps
+
+      - name: Run E2E Tests
+        run: npm run test:e2e
+        env:
+          AUTH_SECRET: ${{ secrets.AUTH_SECRET || 'test-ci-auth-secret-key-at-least-32-chars-long' }}
+
+      - name: Upload Playwright Report on Failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
+          retention-days: 7
