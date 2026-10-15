@@ -30,18 +30,6 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
   ],
   secret: process.env.AUTH_SECRET,
   trustHost: true,
-  useSecureCookies,
-  cookies: {
-    csrfToken: {
-      name: useSecureCookies ? "__Host-authjs.csrf-token" : "authjs.csrf-token",
-      options: {
-        httpOnly: true,
-        sameSite: "lax",
-        path: "/",
-        secure: useSecureCookies,
-      },
-    },
-  },
   callbacks: {
     async session({ session, token }) {
       if (token?.sub && session.user) {

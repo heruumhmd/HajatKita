@@ -465,9 +465,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Sync NextAuth session with currentUser
   useEffect(() => {
-    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") {
-      return;
-    }
     if (isLoggingOutRef.current) return;
 
     if (session?.user && session.user.email) {
@@ -535,9 +532,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // Load from Database whenever user logs in or polls
   const fetchDbData = useCallback(async (email?: string, code?: string, force = false) => {
     if (isLoggingOutRef.current) return;
-    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") {
-      return;
-    }
 
     if (!force) {
       // Skip polling while a save is in progress, in flight, or waiting
@@ -766,7 +760,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     const pollSync = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       if (isLoggingOutRef.current) return;
-      if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") return;
       if (currentUser?.email) {
         fetchDbData(currentUser.email);
       } else if (
@@ -797,11 +790,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // 1. Initial Load from LocalStorage
   useEffect(() => {
     try {
-      if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") {
-        setIsInitialized(true);
-        return;
-      }
-
       // Load user
       const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
       if (storedUser) {
@@ -855,7 +843,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // 2. Auto Save to LocalStorage whenever state changes
   useEffect(() => {
     if (!isInitialized || isLoggingOutRef.current) return;
-    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") return;
     try {
       const payload = {
         wedding,
@@ -1247,7 +1234,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // Save auth user to localStorage
   useEffect(() => {
     if (!isInitialized || isLoggingOutRef.current) return;
-    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") return;
     try {
       if (currentUser) {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
@@ -1270,7 +1256,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     isLoggingOutRef.current = false;
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.removeItem("HAJAT_LOGOUT_FLAG");
+        sessionStorage.clear();
       } catch (e) {}
     }
 
@@ -1324,7 +1310,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     isLoggingOutRef.current = false;
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.removeItem("HAJAT_LOGOUT_FLAG");
+        sessionStorage.clear();
       } catch (e) {}
     }
     const origin = typeof window !== "undefined" ? window.location.origin : "";
@@ -1338,14 +1324,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
     if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
 
-    // 2. Set explicit logout flag in sessionStorage to prevent lingering useSession re-population
+    // 2. Clear all client local/session storage cleanly
     if (typeof window !== "undefined") {
       try {
-        sessionStorage.setItem("HAJAT_LOGOUT_FLAG", "true");
+        sessionStorage.clear();
         localStorage.removeItem(AUTH_STORAGE_KEY);
         localStorage.removeItem(STORAGE_KEY);
         localStorage.removeItem("hajat_workspace_token");
         localStorage.removeItem("hajat_device_credential");
+        localStorage.removeItem("HAJAT_GUEST_ENTERED_WORKSPACE");
       } catch (e) {}
     }
 
