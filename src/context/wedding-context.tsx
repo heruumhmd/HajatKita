@@ -267,6 +267,22 @@ interface WeddingContextType {
 
 const WeddingContext = createContext<WeddingContextType | null>(null);
 
+export function hashPayload(p: any): string {
+  if (!p) return "";
+  const weddingClean = p.wedding
+    ? {
+        ...p.wedding,
+        version: undefined,
+        id: undefined,
+        partnerInfo: undefined,
+      }
+    : undefined;
+  return JSON.stringify({
+    ...p,
+    wedding: weddingClean,
+  });
+}
+
 export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const [isInitialized, setIsInitialized] = useState(false);
 
@@ -301,6 +317,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const lastServerHashRef = useRef<string>("");
   const hasLoadedRemoteRef = useRef<boolean>(false);
   const requestSeqRef = useRef<number>(0);
+  const saveFailedRef = useRef(false);
+  const retryCountRef = useRef(0);
+  const retryTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveFailedToastShownRef = useRef(false);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -309,6 +329,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     weddingRef.current = wedding;
   }, [wedding]);
+
+  useEffect(() => {
+    return () => {
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (retryTimeoutRef.current) clearTimeout(retryTimeoutRef.current);
+    };
+  }, []);
 
   // Sync NextAuth session with currentUser
   useEffect(() => {
@@ -374,8 +401,17 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       if (pendingSaveRef.current || saveTimeoutRef.current !== null) return;
       // Skip polling if there are unsaved local modifications
       const currentPayload = buildPlanPayload();
-      const currentHash = JSON.stringify(currentPayload);
+      const currentHash = hashPayload(currentPayload);
       if (lastServerHashRef.current !== "" && currentHash !== lastServerHashRef.current) {
+        if (saveFailedRef.current && retryCountRef.current >= 3) {
+          if (!saveFailedToastShownRef.current) {
+            saveFailedToastShownRef.current = true;
+            showToastWarning(
+              "Gagal Menyimpan",
+              "Perubahan belum tersimpan. Periksa koneksi."
+            );
+          }
+        }
         return;
       }
     }
@@ -517,7 +553,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setActivityLogs(incomingActivityLogs);
 
         // Bug B: Record applied remote hash so Auto-Save doesn't echo back to server
-        lastServerHashRef.current = JSON.stringify({
+        lastServerHashRef.current = hashPayload({
           wedding: updatedWedding,
           savingContributions: incomingSavings,
           checklist: incomingChecklist,
@@ -675,7 +711,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
 
     const currentPayload = buildPlanPayload();
-    const currentHash = JSON.stringify(currentPayload);
+    const currentHash = hashPayload(currentPayload);
 
     // Bug B: Mencegah echo: jika hash saat ini sama dengan lastServerHashRef, JANGAN menyimpan
     if (lastServerHashRef.current !== "" && currentHash === lastServerHashRef.current) {
@@ -685,52 +721,95 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
+    if (retryTimeoutRef.current) {
+      clearTimeout(retryTimeoutRef.current);
+      retryTimeoutRef.current = null;
+    }
 
     pendingSaveRef.current = true;
     saveTimeoutRef.current = setTimeout(async () => {
-      try {
-        const res = await fetch("/api/wedding/sync", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...currentPayload,
-            baseVersion: versionRef.current,
-            user: currentUser,
-          }),
-        });
-        const resData = await res.json();
+      const executeSave = async (attempt = 0) => {
+        try {
+          const res = await fetch("/api/wedding/sync", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              ...currentPayload,
+              baseVersion: versionRef.current,
+              user: currentUser,
+            }),
+          });
+          const resData = await res.json();
 
-        // 409 Conflict Handling
-        if (res.status === 409 || resData.conflict) {
-          if (typeof resData.version === "number") {
-            versionRef.current = resData.version;
+          // 409 Conflict Handling
+          if (res.status === 409 || resData.conflict) {
+            saveFailedRef.current = false;
+            retryCountRef.current = 0;
+            saveFailedToastShownRef.current = false;
+            if (typeof resData.version === "number") {
+              versionRef.current = resData.version;
+            }
+            showToastWarning(
+              "Data Diperbarui",
+              "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
+            );
+            await fetchDbData(currentUser?.email, wedding.inviteCode, true);
+            return;
           }
-          showToastWarning(
-            "Data Diperbarui",
-            "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
-          );
-          await fetchDbData(currentUser?.email, wedding.inviteCode, true);
-          return;
+
+          if (res.ok && resData.success) {
+            saveFailedRef.current = false;
+            retryCountRef.current = 0;
+            saveFailedToastShownRef.current = false;
+            if (retryTimeoutRef.current) {
+              clearTimeout(retryTimeoutRef.current);
+              retryTimeoutRef.current = null;
+            }
+
+            if (typeof resData.version === "number") {
+              versionRef.current = resData.version;
+            }
+            if (resData.weddingId) {
+              setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
+            }
+            lastServerHashRef.current = hashPayload(currentPayload);
+          } else {
+            console.warn("Auto-save returned error from server:", resData?.error || resData?.message);
+            triggerRetry(attempt);
+          }
+        } catch (e) {
+          console.warn("Auto-save to database deferred", e);
+          triggerRetry(attempt);
+        } finally {
+          saveTimeoutRef.current = null;
+          // Allow polling to resume after save completes
+          setTimeout(() => { pendingSaveRef.current = false; }, 800);
         }
+      };
 
-        if (resData.success) {
-          if (typeof resData.version === "number") {
-            versionRef.current = resData.version;
-          }
-          if (resData.weddingId) {
-            setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
-          }
-          lastServerHashRef.current = currentHash;
+      const triggerRetry = (attempt: number) => {
+        saveFailedRef.current = true;
+        const backoffs = [2000, 5000, 15000];
+        if (attempt < backoffs.length) {
+          const nextAttempt = attempt + 1;
+          retryCountRef.current = nextAttempt;
+          const delay = backoffs[attempt];
+          retryTimeoutRef.current = setTimeout(() => {
+            const latestPayload = buildPlanPayload();
+            const latestHash = hashPayload(latestPayload);
+            if (latestHash !== lastServerHashRef.current) {
+              executeSave(nextAttempt);
+            } else {
+              saveFailedRef.current = false;
+              retryCountRef.current = 0;
+            }
+          }, delay);
         } else {
-          console.warn("Auto-save returned error from server:", resData.error || resData.message);
+          retryCountRef.current = 3;
         }
-      } catch (e) {
-        console.warn("Auto-save to database deferred", e);
-      } finally {
-        saveTimeoutRef.current = null;
-        // Allow polling to resume after save completes
-        setTimeout(() => { pendingSaveRef.current = false; }, 800);
-      }
+      };
+
+      await executeSave(retryCountRef.current);
     }, 500);
 
     return () => {
@@ -776,6 +855,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
       // 409 Conflict Handling
       if (res.status === 409 || resData.conflict) {
+        saveFailedRef.current = false;
+        retryCountRef.current = 0;
+        saveFailedToastShownRef.current = false;
         if (typeof resData.version === "number") {
           versionRef.current = resData.version;
         }
@@ -787,14 +869,22 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         return false;
       }
 
-      if (resData.success) {
+      if (res.ok && resData.success) {
+        saveFailedRef.current = false;
+        retryCountRef.current = 0;
+        saveFailedToastShownRef.current = false;
+        if (retryTimeoutRef.current) {
+          clearTimeout(retryTimeoutRef.current);
+          retryTimeoutRef.current = null;
+        }
+
         if (typeof resData.version === "number") {
           versionRef.current = resData.version;
         }
         if (resData.weddingId) {
           setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
         }
-        lastServerHashRef.current = JSON.stringify(payload);
+        lastServerHashRef.current = hashPayload(payload);
         return true;
       }
       return false;
@@ -941,7 +1031,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setAdminSteps(incomingAdminSteps);
         setActivityLogs(incomingActivityLogs);
 
-        lastServerHashRef.current = JSON.stringify({
+        lastServerHashRef.current = hashPayload({
           wedding: result.wedding || weddingRef.current,
           savingContributions: incomingSavings,
           checklist: incomingChecklist,
