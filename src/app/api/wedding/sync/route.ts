@@ -124,7 +124,12 @@ export async function GET(req: NextRequest) {
     }
 
     // 2. Authenticated Session or Verified Workspace Token Access for Full Workspace
-    const session = await auth();
+    let session = null;
+    try {
+      session = await auth();
+    } catch {
+      // Non-fatal: session store might not be available or cookie malformed
+    }
     const sessionEmail = session?.user?.email?.toLowerCase().trim();
 
     // Check token from headers or query params
@@ -141,9 +146,23 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    const authorizedEmail = sessionEmail || tokenEmail;
+    let authorizedEmail = sessionEmail || tokenEmail;
 
-    // SECURITY CHECK: If someone queries a raw ?email=victim@gmail.com without an active session or valid token
+    // Device secret credential check:
+    // If mobile/tab has no active cookie session or token yet, check if reqEmail presents matching inviteCode
+    if (!authorizedEmail && reqEmail && inviteCode) {
+      const rows = await sql`
+        SELECT id FROM weddings
+        WHERE UPPER(invite_code) = ${inviteCode}
+          AND (LOWER(primary_user_email) = ${reqEmail} OR LOWER(partner_user_email) = ${reqEmail})
+        LIMIT 1
+      `;
+      if (rows && rows.length > 0) {
+        authorizedEmail = reqEmail;
+      }
+    }
+
+    // SECURITY CHECK: If someone queries a raw ?email=victim@gmail.com without an active session, valid token, or matching invite code
     if (reqEmail && authorizedEmail && reqEmail !== authorizedEmail) {
       return NextResponse.json(
         { success: false, message: "Akses ditolak: Parameter email tidak sesuai dengan identitas autentikasi Anda." },
@@ -153,7 +172,7 @@ export async function GET(req: NextRequest) {
 
     if (reqEmail && !authorizedEmail) {
       return NextResponse.json(
-        { success: false, message: "Akses ditolak: Diperlukan sesi autentikasi atau token workspace yang sah untuk mengakses data ini." },
+        { success: false, message: "Akses ditolak: Diperlukan sesi login, kode pasangan valid, atau token workspace yang sah untuk mengakses data ini." },
         { status: 401 }
       );
     }
@@ -593,7 +612,12 @@ export async function POST(req: NextRequest) {
     }
 
     // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session or verified workspace token
-    const session = await auth();
+    let session = null;
+    try {
+      session = await auth();
+    } catch {
+      // Non-fatal: session store might not be available or cookie malformed
+    }
     const sessionEmail = session?.user?.email?.toLowerCase().trim();
 
     const rawToken =
@@ -609,10 +633,45 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const userEmail = sessionEmail || tokenEmail;
+    let userEmail = sessionEmail || tokenEmail;
+
+    // Device secret credential check:
+    // If mobile/tab has no active cookie session or token yet,
+    // verify that body.user.email matches body.wedding.inviteCode or body.wedding.id in database
+    if (!userEmail) {
+      const candidateEmail = body?.user?.email?.toLowerCase().trim();
+      const candidateCode = body?.wedding?.inviteCode?.trim().toUpperCase();
+      const candidateWeddingId = body?.wedding?.id;
+
+      if (candidateEmail) {
+        if (candidateCode) {
+          const rows = await sql`
+            SELECT id FROM weddings
+            WHERE UPPER(invite_code) = ${candidateCode}
+              AND (LOWER(primary_user_email) = ${candidateEmail} OR LOWER(partner_user_email) = ${candidateEmail})
+            LIMIT 1
+          `;
+          if (rows && rows.length > 0) {
+            userEmail = candidateEmail;
+          }
+        }
+        if (!userEmail && candidateWeddingId && candidateWeddingId.length > 20 && candidateWeddingId !== "w-main") {
+          const rows = await sql`
+            SELECT id FROM weddings
+            WHERE id = ${candidateWeddingId}::uuid
+              AND (LOWER(primary_user_email) = ${candidateEmail} OR LOWER(partner_user_email) = ${candidateEmail})
+            LIMIT 1
+          `;
+          if (rows && rows.length > 0) {
+            userEmail = candidateEmail;
+          }
+        }
+      }
+    }
+
     if (!userEmail) {
       return NextResponse.json(
-        { success: false, message: "Akses ditolak: Sesi login atau token workspace yang sah diperlukan untuk menyimpan perubahan." },
+        { success: false, message: "Akses ditolak: Sesi login, kode pasangan valid, atau token workspace yang sah diperlukan untuk menyimpan perubahan." },
         { status: 401 }
       );
     }

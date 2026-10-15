@@ -992,13 +992,20 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const syncNow = async (): Promise<boolean> => {
     try {
       const payload = buildPlanPayload();
+      const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["x-hajat-token"] = token;
+      }
+
       const res = await fetch("/api/wedding/sync", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           ...payload,
           baseVersion: versionRef.current,
           user: currentUser,
+          token: token || undefined,
         }),
       });
       const resData = await res.json();
@@ -1026,6 +1033,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         if (retryTimeoutRef.current) {
           clearTimeout(retryTimeoutRef.current);
           retryTimeoutRef.current = null;
+        }
+
+        if (resData.token && typeof window !== "undefined") {
+          try {
+            localStorage.setItem("hajat_workspace_token", resData.token);
+          } catch {}
         }
 
         if (typeof resData.version === "number") {
