@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
 import { z } from "zod";
+import { findWeddingForEmail } from "@/db/find-wedding";
 
 // In-memory rate limiting per IP (10 requests per minute)
 // NOTE: For multi-instance / serverless deployment (e.g. Vercel),
@@ -172,35 +173,7 @@ export async function GET(req: NextRequest) {
     }
 
     const email = sessionEmail;
-    let weddingRow = null;
-
-    // Find wedding where user is primary or partner
-    const rows = await sql`
-      SELECT * FROM weddings 
-      WHERE LOWER(primary_user_email) = ${email} 
-         OR LOWER(partner_user_email) = ${email}
-         OR LOWER(partner_email) = ${email}
-      ORDER BY updated_at DESC LIMIT 1
-    `;
-    if (rows && rows.length > 0) {
-      weddingRow = rows[0];
-    } else {
-      // Fallback: Check couple_history for active connection
-      const historyRows = await sql`
-        SELECT * FROM couple_history
-        WHERE (LOWER(user1_email) = ${email} OR LOWER(user2_email) = ${email})
-          AND status = 'ACTIVE'
-        ORDER BY updated_at DESC LIMIT 1
-      `;
-      if (historyRows && historyRows.length > 0) {
-        const wRows = await sql`
-          SELECT * FROM weddings WHERE id = ${historyRows[0].wedding_id}::uuid LIMIT 1
-        `;
-        if (wRows && wRows.length > 0) {
-          weddingRow = wRows[0];
-        }
-      }
-    }
+    const weddingRow = await findWeddingForEmail(email);
 
     // Retrieve user's own profile from users table if email is present
     let userProfile = null;
@@ -605,73 +578,8 @@ export async function POST(req: NextRequest) {
 
     const inviteCode = (wedding?.inviteCode || "HAJAT-" + Math.random().toString(36).substring(2, 8).toUpperCase()).toUpperCase();
 
-    // 3. Check if wedding exists by id, primary_user_email, partner email, or invite_code
-    let existingWedding = null;
-    if (wedding?.id && wedding.id.length > 10 && wedding.id !== "w-main") {
-      const rows = await sql`SELECT * FROM weddings WHERE id = ${wedding.id}::uuid LIMIT 1`;
-      if (rows && rows.length > 0) {
-        const candidate = rows[0];
-        const isU1 = (candidate.primary_user_email || "").toLowerCase().trim() === userEmail;
-        const isU2 = (candidate.partner_user_email || candidate.partner_email || "").toLowerCase().trim() === userEmail;
-        const hist = await sql`
-          SELECT id FROM couple_history
-          WHERE wedding_id = ${candidate.id}::uuid
-            AND (LOWER(user1_email) = ${userEmail} OR LOWER(user2_email) = ${userEmail})
-            AND status = 'ACTIVE'
-          LIMIT 1
-        `;
-        const isHistoryMember = hist && hist.length > 0;
-        if (!isU1 && !isU2 && !isHistoryMember) {
-          return NextResponse.json(
-            { success: false, message: "Forbidden: Anda tidak memiliki hak akses untuk mengubah data pernikahan ini" },
-            { status: 403 }
-          );
-        }
-        existingWedding = candidate;
-      }
-    }
-
-    if (!existingWedding && userEmail) {
-      const rows = await sql`
-        SELECT * FROM weddings 
-        WHERE LOWER(primary_user_email) = ${userEmail} 
-           OR LOWER(partner_user_email) = ${userEmail}
-           OR LOWER(partner_email) = ${userEmail}
-        ORDER BY updated_at DESC LIMIT 1
-      `;
-      if (rows && rows.length > 0) {
-        existingWedding = rows[0];
-      } else {
-        const historyRows = await sql`
-          SELECT * FROM couple_history
-          WHERE (LOWER(user1_email) = ${userEmail} OR LOWER(user2_email) = ${userEmail})
-            AND status = 'ACTIVE'
-          ORDER BY updated_at DESC LIMIT 1
-        `;
-        if (historyRows && historyRows.length > 0) {
-          const wRows = await sql`
-            SELECT * FROM weddings WHERE id = ${historyRows[0].wedding_id}::uuid LIMIT 1
-          `;
-          if (wRows && wRows.length > 0) {
-            existingWedding = wRows[0];
-          }
-        }
-      }
-    }
-
-    if (!existingWedding && inviteCode) {
-      const rows = await sql`
-        SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
-      `;
-      if (rows && rows.length > 0) {
-        const candidate = rows[0];
-        const isU1 = (candidate.primary_user_email || "").toLowerCase().trim() === userEmail;
-        const isU2 = (candidate.partner_user_email || candidate.partner_email || "").toLowerCase().trim() === userEmail;
-        if (isU1 || isU2) {
-          existingWedding = candidate;
-        }
-      }
-    }
+    // 3. Deterministic Wedding Resolution using authenticated session email
+    const existingWedding = await findWeddingForEmail(userEmail);
 
     let savedWeddingId: string;
     let savedWeddingVersion: number = 0;

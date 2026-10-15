@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
+import { findWeddingForEmail } from "@/db/find-wedding";
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,13 +26,7 @@ export async function POST(req: NextRequest) {
     }
 
     if (!targetWedding) {
-      const rows = await sql`
-        SELECT * FROM weddings 
-        WHERE (LOWER(primary_user_email) = ${cleanUserEmail} OR LOWER(partner_user_email) = ${cleanUserEmail} OR LOWER(partner_email) = ${cleanUserEmail})
-          AND is_partner_connected = TRUE
-        ORDER BY updated_at DESC LIMIT 1
-      `;
-      if (rows && rows.length > 0) targetWedding = rows[0];
+      targetWedding = await findWeddingForEmail(cleanUserEmail);
     }
 
     if (!targetWedding) {

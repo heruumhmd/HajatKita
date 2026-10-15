@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
+import { findWeddingForEmail } from "@/db/find-wedding";
 
 export async function POST(req: NextRequest) {
   try {
@@ -35,13 +36,30 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const targetWedding = targetWeddings[0];
+    let targetWedding = targetWeddings[0];
     const targetOwnerEmail = (targetWedding.primary_user_email || "").toLowerCase().trim();
 
     // Prevent pairing with self
     if (cleanUserEmail && targetOwnerEmail && cleanUserEmail === targetOwnerEmail) {
       return NextResponse.json(
         { success: false, message: "Ini adalah kode pasangan milik Anda sendiri. Bagikan kode ini ke pasangan Anda." },
+        { status: 400 }
+      );
+    }
+
+    // Resolve target wedding deterministically from target owner's email
+    if (targetOwnerEmail) {
+      const ownerWedding = await findWeddingForEmail(targetOwnerEmail);
+      if (ownerWedding) {
+        targetWedding = ownerWedding;
+      }
+    }
+
+    // Check if the current user is already actively paired with another workspace
+    const userActiveWedding = await findWeddingForEmail(cleanUserEmail);
+    if (userActiveWedding && userActiveWedding.is_partner_connected && userActiveWedding.id !== targetWedding.id) {
+      return NextResponse.json(
+        { success: false, message: "Anda sudah terhubung dengan pasangan lain. Harap batalkan hubungan sebelumnya terlebih dahulu." },
         { status: 400 }
       );
     }
