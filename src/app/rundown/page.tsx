@@ -4,7 +4,7 @@ import React, { useState } from "react";
 import { GitFork, Clock, User, Phone, MapPin, Printer, Plus, Trash2, Edit2 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { RundownItem } from "@/types";
-import { showToastSuccess, showToastInfo, showConfirmDialog } from "@/lib/swal";
+import { showToastSuccess, showToastInfo, showToastWarning, showConfirmDialog } from "@/lib/swal";
 
 export default function RundownPage() {
   const { rundown, addRundown, editRundown, deleteRundown, wedding, requireAuth } = useWedding();
@@ -25,6 +25,18 @@ export default function RundownPage() {
   const filteredItems = rundown.filter(
     (i) => filterPhase === "ALL" || i.phase === filterPhase
   );
+
+  const formatTime = (timeStr: string) => {
+    const trimmed = (timeStr || "").trim();
+    if (!trimmed) return "";
+    const parts = trimmed.split(":");
+    if (parts.length === 2) {
+      const h = parts[0].padStart(2, "0");
+      const m = parts[1].padStart(2, "0");
+      return `${h}:${m}`;
+    }
+    return trimmed;
+  };
 
   const handleOpenAdd = () => {
     if (!requireAuth()) return;
@@ -56,11 +68,19 @@ export default function RundownPage() {
     e.preventDefault();
     if (!activity.trim()) return;
 
+    const formattedStart = formatTime(startTime);
+    const formattedEnd = formatTime(endTime);
+
+    if (formattedStart && formattedEnd && formattedEnd < formattedStart) {
+      showToastWarning("Waktu Tidak Valid", "Jam selesai tidak boleh lebih awal dari jam mulai.");
+      return;
+    }
+
     if (editingItem) {
       editRundown({
         ...editingItem,
-        startTime,
-        endTime,
+        startTime: formattedStart,
+        endTime: formattedEnd,
         activity,
         picName: picName || "Panitia Acara",
         picPhone: picPhone || "-",
@@ -70,8 +90,8 @@ export default function RundownPage() {
       showToastSuccess(`Agenda "${activity}" berhasil diperbarui! ⏱️`);
     } else {
       addRundown({
-        startTime,
-        endTime,
+        startTime: formattedStart,
+        endTime: formattedEnd,
         activity,
         picName: picName || "Panitia Acara",
         picPhone: picPhone || "-",

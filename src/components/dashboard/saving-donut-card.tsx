@@ -11,7 +11,7 @@ import confetti from "canvas-confetti";
 export function SavingDonutCard() {
   const { wedding, savingContributions, addSavingContribution, editSavingContribution, deleteSavingContribution, requireAuth } = useWedding();
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingIdx, setEditingIdx] = useState<number | null>(null);
+  const [editingId, setEditingId] = useState<string | number | null>(null);
   const [depositAmount, setDepositAmount] = useState("");
   const [contributor, setContributor] = useState("Calon Suami");
   const [customLabel, setCustomLabel] = useState("");
@@ -41,18 +41,18 @@ export function SavingDonutCard() {
 
   const handleOpenAdd = () => {
     if (!requireAuth()) return;
-    setEditingIdx(null);
+    setEditingId(null);
     setDepositAmount("");
     setCustomLabel("");
     setContributor("Calon Suami");
     setIsModalOpen(true);
   };
 
-  const handleOpenEdit = (idx: number) => {
+  const handleOpenEdit = (idOrIdx: string | number) => {
     if (!requireAuth()) return;
-    const item = savingContributions[idx];
+    const item = savingContributions.find((c, i) => (typeof idOrIdx === "string" ? c.id === idOrIdx : i === idOrIdx));
     if (!item) return;
-    setEditingIdx(idx);
+    setEditingId(item.id || idOrIdx);
     setDepositAmount(item.amount.toString());
     setCustomLabel(item.label);
     if (item.label.includes("Calon Istri") || item.label.includes("Istri")) {
@@ -74,12 +74,12 @@ export function SavingDonutCard() {
 
     const label = customLabel.trim() || `Tabungan ${contributor}`;
 
-    if (editingIdx !== null) {
-      const existing = savingContributions[editingIdx];
-      editSavingContribution(editingIdx, {
+    if (editingId !== null) {
+      const existing = savingContributions.find((c, i) => (typeof editingId === "string" ? c.id === editingId : i === editingId));
+      editSavingContribution(editingId, {
         label,
         amount: amountNum,
-        color: existing?.color || palette[editingIdx % palette.length],
+        color: existing?.color || palette[0],
       });
       setSuccessToast(`Berhasil memperbarui setoran ${formatRupiah(amountNum)}!`);
       showToastSuccess(`Setoran ${formatRupiah(amountNum)} berhasil diperbarui! 💰`);
@@ -109,22 +109,22 @@ export function SavingDonutCard() {
     }
 
     setIsModalOpen(false);
-    setEditingIdx(null);
+    setEditingId(null);
     setDepositAmount("");
     setCustomLabel("");
     setTimeout(() => setSuccessToast(null), 4000);
   };
 
-  const handleDeleteDeposit = async (idx: number) => {
+  const handleDeleteDeposit = async (idOrIdx: string | number) => {
     if (!requireAuth()) return;
-    const item = savingContributions[idx];
+    const item = savingContributions.find((c, i) => (typeof idOrIdx === "string" ? c.id === idOrIdx : i === idOrIdx));
     const isConfirmed = await showConfirmDialog({
       title: "Hapus Setoran Tabungan?",
       text: `Apakah Anda yakin ingin menghapus data setoran "${item?.label || 'Setoran'}" senilai ${formatRupiah(item?.amount || 0)}?`,
       confirmButtonText: "Ya, Hapus",
     });
     if (!isConfirmed) return;
-    deleteSavingContribution(idx);
+    deleteSavingContribution(idOrIdx);
     showToastSuccess("Setoran tabungan berhasil dihapus");
   };
 
@@ -234,7 +234,7 @@ export function SavingDonutCard() {
             ) : (
               savingContributions.map((c, idx) => (
                 <div
-                  key={idx}
+                  key={c.id || idx}
                   className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 hover:bg-slate-50 transition-colors text-xs gap-2"
                 >
                   <div className="flex items-center gap-2.5 min-w-0">
@@ -256,7 +256,7 @@ export function SavingDonutCard() {
                     </span>
                     <button
                       type="button"
-                      onClick={() => handleOpenEdit(idx)}
+                      onClick={() => handleOpenEdit(c.id || idx)}
                       className="text-slate-400 hover:text-pastel-600 transition-colors p-1"
                       title="Edit setoran"
                     >
@@ -264,7 +264,7 @@ export function SavingDonutCard() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => handleDeleteDeposit(idx)}
+                      onClick={() => handleDeleteDeposit(c.id || idx)}
                       className="text-slate-300 hover:text-rose-500 transition-colors p-1"
                       title="Hapus setoran"
                     >
@@ -284,7 +284,7 @@ export function SavingDonutCard() {
           <div className="bg-white rounded-3xl max-w-md w-full p-6 shadow-xl border border-slate-100 space-y-4 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-2 border-b border-slate-100">
               <h3 className="font-bold text-slate-900 text-base font-serif">
-                {editingIdx !== null ? "Edit Setoran Tabungan" : "Catat Setoran Tabungan Bersama"}
+                {editingId !== null ? "Edit Setoran Tabungan" : "Catat Setoran Tabungan Bersama"}
               </h3>
               <button
                 type="button"
@@ -351,7 +351,7 @@ export function SavingDonutCard() {
                   type="submit"
                   className="px-4 py-2 rounded-xl text-xs font-bold bg-pastel-600 hover:bg-pastel-700 text-white shadow-xs"
                 >
-                  {editingIdx !== null ? "Simpan Perubahan" : "Simpan Setoran"}
+                  {editingId !== null ? "Simpan Perubahan" : "Simpan Setoran"}
                 </button>
               </div>
             </form>

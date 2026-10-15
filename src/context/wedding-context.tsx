@@ -210,9 +210,9 @@ interface WeddingContextType {
 
   // Project Actions
   updateWedding: (data: Partial<WeddingProject>) => void;
-  addSavingContribution: (item: Omit<SavingContribution, "id">) => void;
-  editSavingContribution: (idx: number, item: Omit<SavingContribution, "percentage">) => void;
-  deleteSavingContribution: (idx: number) => void;
+  addSavingContribution: (item: Omit<SavingContribution, "id"> & { id?: string }) => void;
+  editSavingContribution: (idOrIdx: string | number, item: Omit<SavingContribution, "percentage">) => void;
+  deleteSavingContribution: (idOrIdx: string | number) => void;
 
   addChecklist: (item: Omit<ChecklistItem, "id">) => void;
   editChecklist: (item: ChecklistItem) => void;
@@ -526,7 +526,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
         // Bug D: Apply ALL fields consistently from server, including defaults and empty arrays
         const p = data.planData || {};
-        const incomingSavings = Array.isArray(p.savingContributions) ? p.savingContributions : [];
+        const incomingSavings = (Array.isArray(p.savingContributions) ? p.savingContributions : []).map((c: any) => ({
+          ...c,
+          id: c.id || `sc-${crypto.randomUUID()}`,
+        }));
         const incomingChecklist = Array.isArray(p.checklist) ? p.checklist : [];
         const incomingSeserahan = Array.isArray(p.seserahan) ? p.seserahan : [];
         const incomingPostWedding = Array.isArray(p.postWedding) ? p.postWedding : [];
@@ -1005,7 +1008,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       }
       if (result.planData) {
         const p = result.planData;
-        const incomingSavings = Array.isArray(p.savingContributions) ? p.savingContributions : [];
+        const incomingSavings = (Array.isArray(p.savingContributions) ? p.savingContributions : []).map((c: any) => ({
+          ...c,
+          id: c.id || `sc-${crypto.randomUUID()}`,
+        }));
         const incomingChecklist = Array.isArray(p.checklist) ? p.checklist : [];
         const incomingSeserahan = Array.isArray(p.seserahan) ? p.seserahan : [];
         const incomingPostWedding = Array.isArray(p.postWedding) ? p.postWedding : [];
@@ -1118,7 +1124,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    addActivity(updated.name, updated.role, "Memperbarui profil biodata & foto");
+    addActivity(updated.name || currentUser?.name || "Pengguna", updated.role || "GROOM", "Memperbarui profil biodata & foto");
   };
 
   const requireAuth = (callback?: () => void): boolean => {
@@ -1160,8 +1166,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     addActivity(currentUser?.name || "Pengguna", currentUser?.role || "GROOM", "Memperbarui detail profil pernikahan");
   };
 
-  const addSavingContribution = (item: Omit<SavingContribution, "id">) => {
-    const newItems = [...savingContributions, item];
+  const addSavingContribution = (item: Omit<SavingContribution, "id"> & { id?: string }) => {
+    const newItem: SavingContribution = {
+      id: item.id || `sc-${crypto.randomUUID()}`,
+      ...item,
+    };
+    const newItems = [...savingContributions, newItem];
     const total = newItems.reduce((acc, c) => acc + c.amount, 0);
     const withPercentages = newItems.map((c) => ({
       ...c,
@@ -1171,8 +1181,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan setoran tabungan: ${item.label} (Rp ${item.amount.toLocaleString("id-ID")})`);
   };
 
-  const editSavingContribution = (idx: number, item: Omit<SavingContribution, "percentage">) => {
-    const newItems = savingContributions.map((c, i) => (i === idx ? { ...c, ...item } : c));
+  const editSavingContribution = (idOrIdx: string | number, item: Omit<SavingContribution, "percentage">) => {
+    const newItems = savingContributions.map((c, i) => {
+      const match = typeof idOrIdx === "string" ? c.id === idOrIdx : i === idOrIdx;
+      return match ? { ...c, ...item } : c;
+    });
     const total = newItems.reduce((acc, c) => acc + c.amount, 0);
     const withPercentages = newItems.map((c) => ({
       ...c,
@@ -1182,8 +1195,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui setoran tabungan: ${item.label}`);
   };
 
-  const deleteSavingContribution = (idx: number) => {
-    const newItems = savingContributions.filter((_, i) => i !== idx);
+  const deleteSavingContribution = (idOrIdx: string | number) => {
+    const newItems = savingContributions.filter((c, i) => {
+      const match = typeof idOrIdx === "string" ? c.id === idOrIdx : i === idOrIdx;
+      return !match;
+    });
     const total = newItems.reduce((acc, c) => acc + c.amount, 0);
     const withPercentages = newItems.map((c) => ({
       ...c,
@@ -1461,7 +1477,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const loadRecommendedAlignmentTopics = () => {
-    setAlignmentTopics(defaultAlignmentTopics.map((t) => ({ ...t })));
+    setAlignmentTopics((prev) => {
+      const existingQuestions = new Set(prev.map((t) => t.question.toLowerCase().trim()));
+      const newTopics = defaultAlignmentTopics
+        .filter((t) => !existingQuestions.has(t.question.toLowerCase().trim()))
+        .map((t) => ({ ...t, id: `top-${crypto.randomUUID()}` }));
+      return [...prev, ...newTopics];
+    });
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Memuat rekomendasi topik diskusi pranikah");
   };
 

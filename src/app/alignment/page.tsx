@@ -16,6 +16,7 @@ export default function AlignmentPage() {
     deleteAlignmentTopic,
     loadRecommendedAlignmentTopics,
     wedding,
+    currentUser,
     requireAuth,
     refreshWorkspace,
   } = useWedding();
@@ -47,6 +48,10 @@ export default function AlignmentPage() {
 
   const handleOpenAnswer = (topicId: string, role: "GROOM" | "BRIDE", currentVal: string) => {
     if (!requireAuth()) return;
+    if (currentUser?.role && currentUser.role !== role) {
+      showToastInfo(`Anda masuk sebagai ${currentUser.role === "GROOM" ? "Calon Suami" : "Calon Istri"}. Hanya dapat mengisi kolom jawaban Anda sendiri.`);
+      return;
+    }
     setAnsweringTopicId(topicId);
     setActiveAnswerRole(role);
     setAnswerInput(currentVal);
@@ -110,6 +115,10 @@ export default function AlignmentPage() {
     e.preventDefault();
     if (!requireAuth()) return;
     if (!answeringTopicId) return;
+    if (currentUser?.role && currentUser.role !== activeAnswerRole) {
+      showToastInfo("Anda hanya dapat menyimpan jawaban sesuai peran Anda.");
+      return;
+    }
 
     updateAlignmentAnswer(answeringTopicId, activeAnswerRole, answerInput);
     showToastSuccess("Jawaban Anda berhasil disimpan! 💬");
