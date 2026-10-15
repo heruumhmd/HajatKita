@@ -16,12 +16,12 @@ import {
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import confetti from "canvas-confetti";
-import { showSuccessAlert } from "@/lib/swal";
+import { showSuccessAlert, showToastError } from "@/lib/swal";
 
 export default function DynamicInvitationPage() {
   const params = useParams();
   const slug = (params?.slug as string) || "kami-berdua";
-  const { wedding, addGuest, guests } = useWedding();
+  const { wedding } = useWedding();
 
   const [weddingData, setWeddingData] = useState(wedding);
 
@@ -94,7 +94,7 @@ export default function DynamicInvitationPage() {
 
     // 1. Direct persistent save to Neon Database
     try {
-      await fetch("/api/wedding/sync", {
+      const res = await fetch("/api/wedding/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -112,20 +112,17 @@ export default function DynamicInvitationPage() {
           },
         }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToastError("Gagal Mengirim", data.message || "Gagal mengirim konfirmasi kehadiran.");
+        return;
+      }
     } catch (err) {
       console.warn("Direct RSVP to DB error", err);
+      showToastError("Gagal Mengirim", "Terjadi kesalahan jaringan saat mengirim RSVP.");
+      return;
     }
-
-    // 2. Also update local context state
-    addGuest({
-      name: guestName,
-      side: guestSide,
-      category: "Undangan Digital",
-      pax: rsvpStatus === "CONFIRMED_ATTENDING" ? pax : 0,
-      phone: guestPhone || "-",
-      rsvpStatus,
-      notes: wishes,
-    });
 
     try {
       confetti({

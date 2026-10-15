@@ -17,12 +17,12 @@ import { useWedding } from "@/context/wedding-context";
 import { PostWeddingItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
 import confetti from "canvas-confetti";
-import { showToastSuccess } from "@/lib/swal";
+import { showToastSuccess, showToastError } from "@/lib/swal";
 
 export default function DynamicRegistryPage() {
   const params = useParams();
   const slug = (params?.slug as string) || "kami-berdua";
-  const { wedding, postWedding, claimPostWedding } = useWedding();
+  const { wedding } = useWedding();
 
   const [weddingData, setWeddingData] = useState(wedding);
   const [dbItems, setDbItems] = useState<PostWeddingItem[]>([]);
@@ -48,7 +48,7 @@ export default function DynamicRegistryPage() {
   }, [slug]);
 
   const activeWedding = (weddingData && (weddingData.groomName || weddingData.brideName)) ? weddingData : wedding;
-  const activePostWedding = dbItems.length > 0 ? dbItems : postWedding;
+  const activePostWedding = dbItems;
 
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [friendName, setFriendName] = useState("");
@@ -61,7 +61,7 @@ export default function DynamicRegistryPage() {
 
     // 1. Persist direct to database
     try {
-      await fetch("/api/wedding/sync", {
+      const res = await fetch("/api/wedding/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -72,15 +72,22 @@ export default function DynamicRegistryPage() {
           friendName: friendName.trim(),
         }),
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        showToastError("Gagal Mengklaim", data.message || "Gagal mengklaim kado.");
+        return;
+      }
     } catch (err) {
       console.warn("Direct gift claim to DB error", err);
+      showToastError("Gagal Mengklaim", "Terjadi kesalahan jaringan saat mengklaim kado.");
+      return;
     }
 
     // 2. Update local state
     setDbItems((prev) =>
       prev.map((i) => (i.id === claimingId ? { ...i, isAcquired: true, claimedBy: friendName.trim() } : i))
     );
-    claimPostWedding(claimingId, friendName);
 
     try {
       confetti({
