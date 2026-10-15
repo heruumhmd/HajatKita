@@ -838,7 +838,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const login = (userData: Partial<User>) => {
     const userRole = userData.role || "GROOM";
     const user: User = {
-      id: userData.id || `u-${Date.now()}`,
+      id: userData.id || `u-${crypto.randomUUID()}`,
       name: userData.name || "Calon Pengantin",
       nickname: userData.nickname || userData.name?.split(" ")[0] || "Saya",
       email: userData.email || "pengantin@hajatkita.id",
@@ -1045,7 +1045,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // Helper to add activity log
   const addActivity = (userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string) => {
     const newLog: ActivityLog = {
-      id: `act-${Date.now()}`,
+      id: `act-${crypto.randomUUID()}`,
       userName,
       userRole,
       action,
@@ -1104,7 +1104,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addChecklist = (item: Omit<ChecklistItem, "id">) => {
     const newItem: ChecklistItem = {
-      id: `chk-${Date.now()}`,
+      id: `chk-${crypto.randomUUID()}`,
       ...item,
     };
     setChecklist((prev) => [newItem, ...prev]);
@@ -1134,7 +1134,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addSeserahan = (item: Omit<SeserahanItem, "id">) => {
     const newItem: SeserahanItem = {
-      id: `ses-${Date.now()}`,
+      id: `ses-${crypto.randomUUID()}`,
       ...item,
     };
     setSeserahan((prev) => [newItem, ...prev]);
@@ -1157,7 +1157,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addPostWedding = (item: Omit<PostWeddingItem, "id">) => {
     const newItem: PostWeddingItem = {
-      id: `pw-${Date.now()}`,
+      id: `pw-${crypto.randomUUID()}`,
       ...item,
     };
     setPostWedding((prev) => [newItem, ...prev]);
@@ -1190,7 +1190,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addGuest = (item: Omit<GuestItem, "id">) => {
     const newItem: GuestItem = {
-      id: `g-${Date.now()}`,
+      id: `g-${crypto.randomUUID()}`,
       ...item,
     };
     setGuests((prev) => [newItem, ...prev]);
@@ -1241,7 +1241,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addRundown = (item: Omit<RundownItem, "id">) => {
     const newItem: RundownItem = {
-      id: `rd-${Date.now()}`,
+      id: `rd-${crypto.randomUUID()}`,
       ...item,
     };
     setRundown((prev) =>
@@ -1262,7 +1262,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addBudgetCategory = (item: Omit<BudgetCategory, "id">) => {
     const newItem: BudgetCategory = {
-      id: `b-${Date.now()}`,
+      id: `b-${crypto.randomUUID()}`,
       ...item,
     };
     setBudgetCategories((prev) => [newItem, ...prev]);
@@ -1279,7 +1279,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addVendor = (item: Omit<VendorMilestone, "id">) => {
     const newItem: VendorMilestone = {
-      id: `vm-${Date.now()}`,
+      id: `vm-${crypto.randomUUID()}`,
       ...item,
     };
     setVendors((prev) => [newItem, ...prev]);
@@ -1348,7 +1348,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const addAlignmentTopic = (question: string, category: AlignmentTopic["category"]) => {
     const newTopic: AlignmentTopic = {
-      id: `top-${Date.now()}`,
+      id: `top-${crypto.randomUUID()}`,
       category,
       question,
       groomAnswer: "",
