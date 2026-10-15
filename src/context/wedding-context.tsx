@@ -16,6 +16,8 @@ import {
   AlignmentTopic,
   AdminStep,
   ActivityLog,
+  ActivityActionType,
+  ActivityModule,
   RSVPStatus,
   User,
 } from "@/types";
@@ -260,13 +262,90 @@ interface WeddingContextType {
   loadRecommendedAlignmentTopics: () => void;
 
   toggleAdminRequirement: (stepId: string, reqId: string) => void;
-  addActivity: (userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string) => void;
+  addActivity: (
+    userName: string,
+    userRole: "GROOM" | "BRIDE" | "COLLABORATOR",
+    action: string,
+    options?: {
+      actionType?: ActivityActionType;
+      module?: ActivityModule;
+      details?: string;
+    }
+  ) => void;
 
   clearAllData: () => void;
   loadTemplateData: () => void;
 }
 
 const WeddingContext = createContext<WeddingContextType | null>(null);
+
+export function autoDetectTypeAndModule(action: string): { actionType: ActivityActionType; module: ActivityModule } {
+  const lower = (action || "").toLowerCase();
+  let actionType: ActivityActionType = "UPDATE";
+  let module: ActivityModule = "WEDDING";
+
+  if (lower.startsWith("masuk") || lower.includes("berhasil masuk") || lower.includes("login")) {
+    actionType = "LOGIN";
+  } else if (lower.startsWith("keluar") || lower.includes("logout")) {
+    actionType = "LOGOUT";
+  } else if (lower.startsWith("menambah") || lower.includes("menambahkan") || lower.includes("membuat")) {
+    actionType = "CREATE";
+  } else if (lower.startsWith("menghapus") || lower.includes("dihapus")) {
+    actionType = "DELETE";
+  } else if (
+    lower.includes("selesai") ||
+    lower.includes("menandai") ||
+    lower.includes("sepakat") ||
+    lower.includes("status") ||
+    lower.includes("konfirmasi rsvp") ||
+    lower.includes("terpenuhi")
+  ) {
+    actionType = "STATUS";
+  } else if (
+    lower.includes("bayar") ||
+    lower.includes("termin") ||
+    lower.includes("amplop") ||
+    lower.includes("setoran")
+  ) {
+    actionType = "PAYMENT";
+  } else if (lower.includes("klaim") || lower.includes("mengklaim")) {
+    actionType = "CLAIM";
+  } else if (lower.includes("mengosongkan") || lower.includes("mereset")) {
+    actionType = "DELETE";
+  } else {
+    actionType = "UPDATE";
+  }
+
+  if (lower.includes("login") || lower.includes("logout") || lower.includes("sesi")) {
+    module = "AUTH";
+  } else if (lower.includes("profil") || lower.includes("avatar") || lower.includes("biodata")) {
+    module = "PROFILE";
+  } else if (lower.includes("pasangan") || lower.includes("workspace") || lower.includes("kode undangan")) {
+    module = "WORKSPACE";
+  } else if (lower.includes("tabungan") || lower.includes("setoran")) {
+    module = "SAVINGS";
+  } else if (lower.includes("pos anggaran") || lower.includes("budget") || lower.includes("anggaran")) {
+    module = "BUDGET";
+  } else if (lower.includes("tugas") || lower.includes("checklist")) {
+    module = "CHECKLIST";
+  } else if (lower.includes("seserahan") || lower.includes("kotak")) {
+    module = "SESERAHAN";
+  } else if (lower.includes("wishlist") || lower.includes("kado") || lower.includes("pasca-nikah")) {
+    module = "POST_WEDDING";
+  } else if (lower.includes("tamu") || lower.includes("rsvp") || lower.includes("amplop") || lower.includes("kuota")) {
+    module = "GUESTS";
+  } else if (lower.includes("rundown") || lower.includes("agenda")) {
+    module = "RUNDOWN";
+  } else if (lower.includes("vendor") || lower.includes("kontrak") || lower.includes("termin")) {
+    module = "VENDORS";
+  } else if (lower.includes("kua") || lower.includes("berkas") || lower.includes("syarat") || lower.includes("administrasi")) {
+    module = "ADMINISTRATION";
+  } else if (lower.includes("pranikah") || lower.includes("topik") || lower.includes("pandangan") || lower.includes("bicara")) {
+    module = "ALIGNMENT";
+  }
+
+  return { actionType, module };
+}
 
 export function hashPayload(p: any): string {
   if (!p) return "";
@@ -1153,7 +1232,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       return prev;
     });
 
-    addActivity(user.name, user.role, "Berhasil masuk ke Hajat Kita");
+    addActivity(
+      user.name,
+      user.role,
+      `Masuk ke akun (Login via ${user.provider === "google" ? "Google" : "Email"})`,
+      {
+        actionType: "LOGIN",
+        module: "AUTH",
+        details: `Sesi login aktif untuk ${user.email}`,
+      }
+    );
 
     // Execute pending action after login if exists
     if (pendingAuthCallbackRef.current) {
@@ -1169,6 +1257,46 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const logout = async () => {
+    const activeUser = currentUserRef.current;
+    if (activeUser) {
+      const logoutLog: ActivityLog = {
+        id: `act-${crypto.randomUUID()}`,
+        userName: getActorName(activeUser.name, activeUser.role),
+        userRole: activeUser.role,
+        action: "Keluar dari sesi akun (Logout)",
+        actionType: "LOGOUT",
+        module: "AUTH",
+        details: "Pengguna keluar dari perangkat ini",
+        timeAgo: "Baru saja",
+        timestamp: Date.now(),
+        createdAt: new Date().toISOString(),
+      };
+
+      // Persist logout event to shared database so partner / audit trail records it
+      if (activeUser.email || (weddingRef.current.id && weddingRef.current.id !== "w-main")) {
+        try {
+          const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
+          const headers: Record<string, string> = { "Content-Type": "application/json" };
+          if (token) headers["x-hajat-token"] = token;
+          const currentPlan = latestPayloadRef.current || buildPlanPayload();
+          const payloadWithLogout = {
+            ...currentPlan,
+            wedding: weddingRef.current,
+            activityLogs: [logoutLog, ...(currentPlan.activityLogs || []).slice(0, 299)],
+            baseVersion: versionRef.current,
+            user: activeUser,
+          };
+          await fetch("/api/wedding/sync", {
+            method: "POST",
+            headers,
+            body: JSON.stringify(payloadWithLogout),
+          });
+        } catch (e) {
+          console.warn("Could not sync logout activity", e);
+        }
+      }
+    }
+
     setCurrentUser(null);
     localStorage.removeItem(AUTH_STORAGE_KEY);
     localStorage.removeItem(STORAGE_KEY);
@@ -1284,7 +1412,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         currentUser?.role || "GROOM",
         result.isRestoredFromSamePartner
           ? "Memulihkan seluruh rencana pernikahan bersama pasangan lama"
-          : `Terhubung dengan pasangan (${result.wedding?.partnerInfo?.name || "Pasangan"})`
+          : `Terhubung dengan pasangan (${result.wedding?.partnerInfo?.name || "Pasangan"}) di Duo Workspace`,
+        {
+          actionType: "STATUS",
+          module: "WORKSPACE",
+          details: `Kode undangan: ${inviteCode}`,
+        }
       );
 
       return { success: true, message: result.message };
@@ -1317,7 +1450,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       addActivity(
         currentUser?.name || "Pengguna",
         currentUser?.role || "GROOM",
-        "Membatalkan hubungan pasangan (seluruh data tersimpan aman di database)"
+        "Membatalkan hubungan pasangan (seluruh data tersimpan aman di database)",
+        {
+          actionType: "UPDATE",
+          module: "WORKSPACE",
+          details: "Duo Workspace diputuskan sementara",
+        }
       );
 
       return { success: true, message: result.message };
@@ -1329,6 +1467,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const generateNewInviteCode = () => {
     const newCode = generateUniqueInviteCode();
     setWedding((prev) => ({ ...prev, inviteCode: newCode }));
+    addActivity(
+      currentUser?.name || "Pengguna",
+      currentUser?.role || "GROOM",
+      `Membuat kode undangan Duo Workspace baru: ${newCode}`,
+      {
+        actionType: "UPDATE",
+        module: "WORKSPACE",
+        details: "Kode baru dibuat untuk menghubungkan akun pasangan",
+      }
+    );
   };
 
   const updateUserProfile = (data: Partial<User>) => {
@@ -1349,7 +1497,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       });
     }
 
-    addActivity(updated.name || currentUser?.name || "Pengguna", updated.role || "GROOM", "Memperbarui profil biodata & foto");
+    addActivity(
+      updated.name || currentUser?.name || "Pengguna",
+      updated.role || "GROOM",
+      "Memperbarui profil biodata & karakter avatar",
+      {
+        actionType: "UPDATE",
+        module: "PROFILE",
+        details: `Nama: ${updated.name || "-"}, Panggilan: ${updated.nickname || "-"}, No. HP: ${updated.phone || "-"}`,
+      }
+    );
   };
 
   const requireAuth = (callback?: () => void): boolean => {
@@ -1383,22 +1540,35 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     return name;
   };
 
-  // Helper to add activity log with real timestamps and 200 items retention
-  const addActivity = (userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string) => {
+  // Helper to add activity log with real timestamps, rich audit metadata and 300 items retention
+  const addActivity = (
+    userName: string,
+    userRole: "GROOM" | "BRIDE" | "COLLABORATOR",
+    action: string,
+    options?: {
+      actionType?: ActivityActionType;
+      module?: ActivityModule;
+      details?: string;
+    }
+  ) => {
     const resolvedName = getActorName(userName, userRole);
     const now = Date.now();
     const isoString = new Date(now).toISOString();
+    const auto = autoDetectTypeAndModule(action);
 
     const newLog: ActivityLog = {
       id: `act-${crypto.randomUUID()}`,
       userName: resolvedName,
       userRole,
       action,
+      actionType: options?.actionType || auto.actionType,
+      module: options?.module || auto.module,
+      details: options?.details,
       timeAgo: "Baru saja",
       timestamp: now,
       createdAt: isoString,
     };
-    setActivityLogs((prev) => [newLog, ...prev.slice(0, 199)]);
+    setActivityLogs((prev) => [newLog, ...prev.slice(0, 299)]);
   };
 
   // Actions
@@ -1413,7 +1583,17 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       }
       return updated;
     });
-    addActivity(currentUser?.name || "Pengguna", currentUser?.role || "GROOM", "Memperbarui detail profil pernikahan");
+    const updatedKeys = Object.keys(data).filter((k) => data[k as keyof WeddingProject] !== undefined);
+    addActivity(
+      currentUser?.name || "Pengguna",
+      currentUser?.role || "GROOM",
+      "Memperbarui detail profil pernikahan",
+      {
+        actionType: "UPDATE",
+        module: "WEDDING",
+        details: updatedKeys.length > 0 ? `Bidang diperbarui: ${updatedKeys.join(", ")}` : undefined,
+      }
+    );
   };
 
   const addSavingContribution = (item: Omit<SavingContribution, "id"> & { id?: string }) => {
@@ -1428,7 +1608,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       percentage: total > 0 ? Number(((c.amount / total) * 100).toFixed(1)) : 0,
     }));
     setSavingContributions(withPercentages);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan setoran tabungan: ${item.label} (Rp ${item.amount.toLocaleString("id-ID")})`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan setoran tabungan: ${item.label} (Rp ${item.amount.toLocaleString("id-ID")})`,
+      {
+        actionType: "CREATE",
+        module: "SAVINGS",
+        details: `Nominal: Rp ${item.amount.toLocaleString("id-ID")}`,
+      }
+    );
   };
 
   const editSavingContribution = (idOrIdx: string | number, item: Omit<SavingContribution, "percentage">) => {
@@ -1442,10 +1631,22 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       percentage: total > 0 ? Number(((c.amount / total) * 100).toFixed(1)) : 0,
     }));
     setSavingContributions(withPercentages);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui setoran tabungan: ${item.label}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui setoran tabungan: ${item.label} (Rp ${item.amount.toLocaleString("id-ID")})`,
+      {
+        actionType: "UPDATE",
+        module: "SAVINGS",
+        details: `Nominal baru: Rp ${item.amount.toLocaleString("id-ID")}`,
+      }
+    );
   };
 
   const deleteSavingContribution = (idOrIdx: string | number) => {
+    const target = savingContributions.find((c, i) =>
+      typeof idOrIdx === "string" ? c.id === idOrIdx : i === idOrIdx
+    );
     const newItems = savingContributions.filter((c, i) => {
       const match = typeof idOrIdx === "string" ? c.id === idOrIdx : i === idOrIdx;
       return !match;
@@ -1456,6 +1657,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       percentage: total > 0 ? Number(((c.amount / total) * 100).toFixed(1)) : 0,
     }));
     setSavingContributions(withPercentages);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus setoran tabungan: ${target?.label || "Setoran"} (Rp ${(target?.amount || 0).toLocaleString("id-ID")})`,
+      {
+        actionType: "DELETE",
+        module: "SAVINGS",
+        details: `Setoran tabungan senilai Rp ${(target?.amount || 0).toLocaleString("id-ID")} dihapus`,
+      }
+    );
   };
 
   const addChecklist = (item: Omit<ChecklistItem, "id">) => {
@@ -1464,29 +1675,75 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       ...item,
     };
     setChecklist((prev) => [newItem, ...prev]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan tugas baru: ${item.title}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan tugas checklist: ${item.title} (${item.timelineTag})`,
+      {
+        actionType: "CREATE",
+        module: "CHECKLIST",
+        details: `Target: ${item.timelineTag}, PIC: ${item.assignedTo}, Kategori: ${item.category}`,
+      }
+    );
   };
 
   const editChecklist = (item: ChecklistItem) => {
     setChecklist((prev) => prev.map((c) => (c.id === item.id ? item : c)));
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui tugas: ${item.title}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui tugas checklist: ${item.title}`,
+      {
+        actionType: "UPDATE",
+        module: "CHECKLIST",
+        details: `Target: ${item.timelineTag}, PIC: ${item.assignedTo}`,
+      }
+    );
   };
 
   const toggleChecklist = (id: string) => {
+    let targetTitle = "";
+    let willBeDone = false;
     setChecklist((prev) =>
       prev.map((item) => {
         if (item.id === id) {
-          const nextStatus = item.status === "COMPLETED" ? "TODO" : "COMPLETED";
-          return { ...item, status: nextStatus };
+          willBeDone = item.status !== "COMPLETED";
+          targetTitle = item.title;
+          return { ...item, status: willBeDone ? "COMPLETED" : "TODO" };
         }
         return item;
       })
     );
+    if (targetTitle) {
+      addActivity(
+        currentUser?.name || "Calon Pengantin",
+        currentUser?.role || "GROOM",
+        willBeDone
+          ? `Menyelesaikan tugas checklist: "${targetTitle}"`
+          : `Membatalkan penyelesaian tugas checklist: "${targetTitle}"`,
+        {
+          actionType: "STATUS",
+          module: "CHECKLIST",
+          details: willBeDone ? "Status diubah menjadi Selesai" : "Status dikembalikan ke Belum Selesai",
+        }
+      );
+    }
   };
 
   const deleteChecklist = (id: string) => {
+    const target = checklist.find((item) => item.id === id);
     trackDeletedId(id);
     setChecklist((prev) => prev.filter((item) => item.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus tugas checklist: "${target?.title || "Tugas"}"`,
+      {
+        actionType: "DELETE",
+        module: "CHECKLIST",
+        details: target ? `Target: ${target.timelineTag}, PIC: ${target.assignedTo}` : undefined,
+      }
+    );
   };
 
   const addSeserahan = (item: Omit<SeserahanItem, "id">) => {
@@ -1495,22 +1752,75 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       ...item,
     };
     setSeserahan((prev) => [newItem, ...prev]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "BRIDE", `Menambahkan barang seserahan: ${item.name}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "BRIDE",
+      `Menambahkan barang seserahan: ${item.name} (${item.boxName})`,
+      {
+        actionType: "CREATE",
+        module: "SESERAHAN",
+        details: `Kotak: ${item.boxName}, Brand: ${item.brand}, Estimasi: Rp ${(item.estimatedPrice || 0).toLocaleString("id-ID")}`,
+      }
+    );
   };
 
   const toggleSeserahan = (id: string) => {
+    let targetName = "";
+    let willBePurchased = false;
     setSeserahan((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isPurchased: !item.isPurchased } : item))
+      prev.map((item) => {
+        if (item.id === id) {
+          willBePurchased = !item.isPurchased;
+          targetName = item.name;
+          return { ...item, isPurchased: willBePurchased };
+        }
+        return item;
+      })
     );
+    if (targetName) {
+      addActivity(
+        currentUser?.name || "Calon Pengantin",
+        currentUser?.role || "BRIDE",
+        willBePurchased
+          ? `Menandai barang seserahan sudah terbeli: "${targetName}"`
+          : `Mengubah status seserahan menjadi belum terbeli: "${targetName}"`,
+        {
+          actionType: "STATUS",
+          module: "SESERAHAN",
+          details: willBePurchased ? "Barang sudah dibeli" : "Status barang belum dibeli",
+        }
+      );
+    }
   };
 
   const editSeserahan = (item: SeserahanItem) => {
     setSeserahan((prev) => prev.map((s) => (s.id === item.id ? item : s)));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "BRIDE",
+      `Memperbarui barang seserahan: ${item.name} (${item.boxName})`,
+      {
+        actionType: "UPDATE",
+        module: "SESERAHAN",
+        details: `Brand: ${item.brand}, Estimasi: Rp ${(item.estimatedPrice || 0).toLocaleString("id-ID")}`,
+      }
+    );
   };
 
   const deleteSeserahan = (id: string) => {
+    const target = seserahan.find((s) => s.id === id);
     trackDeletedId(id);
     setSeserahan((prev) => prev.filter((s) => s.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "BRIDE",
+      `Menghapus barang seserahan: "${target?.name || "Barang"}" (${target?.boxName || ""})`,
+      {
+        actionType: "DELETE",
+        module: "SESERAHAN",
+        details: target ? `Dihapus dari ${target.boxName}` : undefined,
+      }
+    );
   };
 
   const addPostWedding = (item: Omit<PostWeddingItem, "id">) => {
@@ -1519,32 +1829,98 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       ...item,
     };
     setPostWedding((prev) => [newItem, ...prev]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan wishlist rumah pasca-nikah: ${item.name}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan wishlist pasca-nikah: ${item.name} (${item.roomCategory})`,
+      {
+        actionType: "CREATE",
+        module: "POST_WEDDING",
+        details: `Ruang: ${item.roomCategory}, Prioritas: ${item.priority}, Estimasi: Rp ${(item.price || 0).toLocaleString("id-ID")}`,
+      }
+    );
   };
 
   const editPostWedding = (item: PostWeddingItem) => {
     setPostWedding((prev) => prev.map((p) => (p.id === item.id ? item : p)));
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui wishlist pasca-nikah: ${item.name}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui wishlist pasca-nikah: ${item.name}`,
+      {
+        actionType: "UPDATE",
+        module: "POST_WEDDING",
+        details: `Ruang: ${item.roomCategory}, Prioritas: ${item.priority}, Harga: Rp ${(item.price || 0).toLocaleString("id-ID")}`,
+      }
+    );
   };
 
   const togglePostWedding = (id: string) => {
+    let targetName = "";
+    let willBeAcquired = false;
     setPostWedding((prev) =>
-      prev.map((item) => (item.id === id ? { ...item, isAcquired: !item.isAcquired } : item))
+      prev.map((item) => {
+        if (item.id === id) {
+          willBeAcquired = !item.isAcquired;
+          targetName = item.name;
+          return { ...item, isAcquired: willBeAcquired };
+        }
+        return item;
+      })
     );
+    if (targetName) {
+      addActivity(
+        currentUser?.name || "Calon Pengantin",
+        currentUser?.role || "GROOM",
+        willBeAcquired
+          ? `Menandai kado/wishlist terpenuhi: "${targetName}"`
+          : `Mengubah status wishlist menjadi belum terpenuhi: "${targetName}"`,
+        {
+          actionType: "STATUS",
+          module: "POST_WEDDING",
+          details: willBeAcquired ? "Barang sudah diperoleh" : "Barang belum diperoleh",
+        }
+      );
+    }
   };
 
   const claimPostWedding = (id: string, friendName: string) => {
+    let targetName = "";
     setPostWedding((prev) =>
-      prev.map((item) =>
-        item.id === id ? { ...item, isAcquired: true, claimedBy: friendName } : item
-      )
+      prev.map((item) => {
+        if (item.id === id) {
+          targetName = item.name;
+          return { ...item, isAcquired: true, claimedBy: friendName };
+        }
+        return item;
+      })
     );
-    addActivity(friendName, "COLLABORATOR", "Mengklaim kado pernikahan dari wishlist");
+    addActivity(
+      friendName,
+      "COLLABORATOR",
+      `Mengklaim kado pernikahan: "${targetName || "Kado"}" dari wishlist`,
+      {
+        actionType: "CLAIM",
+        module: "POST_WEDDING",
+        details: `Dihadiahkan oleh: ${friendName}`,
+      }
+    );
   };
 
   const deletePostWedding = (id: string) => {
+    const target = postWedding.find((p) => p.id === id);
     trackDeletedId(id);
     setPostWedding((prev) => prev.filter((item) => item.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus wishlist pasca-nikah: "${target?.name || "Wishlist"}"`,
+      {
+        actionType: "DELETE",
+        module: "POST_WEDDING",
+        details: target ? `Kategori: ${target.roomCategory}, Harga: Rp ${(target.price || 0).toLocaleString("id-ID")}` : undefined,
+      }
+    );
   };
 
   const addGuest = (item: Omit<GuestItem, "id">) => {
@@ -1553,22 +1929,54 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       ...item,
     };
     setGuests((prev) => [newItem, ...prev]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan tamu undangan: ${item.name}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan tamu undangan: ${item.name} (${item.pax} Pax)`,
+      {
+        actionType: "CREATE",
+        module: "GUESTS",
+        details: `Pihak: ${item.side === "BOTH" ? "Bersama" : item.side === "GROOM" ? "Suami" : "Istri"}, Kategori: ${item.category}`,
+      }
+    );
   };
 
   const editGuest = (item: GuestItem) => {
     setGuests((prev) => prev.map((g) => (g.id === item.id ? item : g)));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui data tamu undangan: ${item.name} (${item.pax} Pax)`,
+      {
+        actionType: "UPDATE",
+        module: "GUESTS",
+        details: `Kategori: ${item.category}, Status RSVP: ${item.rsvpStatus}`,
+      }
+    );
   };
 
   const deleteGuest = (id: string) => {
+    const target = guests.find((g) => g.id === id);
     trackDeletedId(id);
     setGuests((prev) => prev.filter((g) => g.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus data tamu undangan: "${target?.name || "Tamu"}" (${target?.pax || 1} Pax)`,
+      {
+        actionType: "DELETE",
+        module: "GUESTS",
+        details: target ? `Kategori: ${target.category}, No. HP: ${target.phone || "-"}` : undefined,
+      }
+    );
   };
 
   const updateGuestRSVP = (id: string, status: RSVPStatus, pax?: number, note?: string) => {
+    let targetName = "";
     setGuests((prev) =>
       prev.map((g) => {
         if (g.id === id) {
+          targetName = g.name;
           return {
             ...g,
             rsvpStatus: status,
@@ -1579,24 +1987,63 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         return g;
       })
     );
+    const statusLabel =
+      status === "CONFIRMED_ATTENDING"
+        ? `Hadir (${pax || 2} Pax)`
+        : status === "DECLINED"
+        ? "Tidak Hadir"
+        : "Menunggu Konfirmasi";
+    addActivity(
+      currentUser?.name || targetName || "Tamu",
+      currentUser?.role || "COLLABORATOR",
+      `Mengubah status RSVP "${targetName || "Tamu"}": ${statusLabel}`,
+      {
+        actionType: "STATUS",
+        module: "GUESTS",
+        details: note ? `Pesan: ${note}` : undefined,
+      }
+    );
   };
 
   const recordEnvelope = (guestId: string, amount: number, giftDesc?: string) => {
+    let guestName = "";
     setGuests((prev) =>
-      prev.map((g) =>
-        g.id === guestId
-          ? {
-              ...g,
-              envelopeAmount: amount,
-              giftDescription: giftDesc || g.giftDescription,
-            }
-          : g
-      )
+      prev.map((g) => {
+        if (g.id === guestId) {
+          guestName = g.name;
+          return {
+            ...g,
+            envelopeAmount: amount,
+            giftDescription: giftDesc || g.giftDescription,
+          };
+        }
+        return g;
+      })
+    );
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Mencatat amplop/hadiah dari "${guestName || "Tamu"}": ${amount > 0 ? `Rp ${amount.toLocaleString("id-ID")}` : ""}${giftDesc ? ` (${giftDesc})` : ""}`,
+      {
+        actionType: "PAYMENT",
+        module: "GUESTS",
+        details: `Pencatatan amplop pernikahan sebesar Rp ${amount.toLocaleString("id-ID")}`,
+      }
     );
   };
 
   const updateFamilyQuota = (quota: Partial<FamilyQuota>) => {
     setFamilyQuota((prev) => ({ ...prev, ...quota }));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui simulasi kuota tamu keluarga (Kapasitas: ${quota.venueCapacity || familyQuota.venueCapacity} Pax)`,
+      {
+        actionType: "UPDATE",
+        module: "GUESTS",
+        details: "Simulasi pembagian kursi keluarga pria, wanita, & orang tua disesuaikan",
+      }
+    );
   };
 
   const addRundown = (item: Omit<RundownItem, "id">) => {
@@ -1607,18 +2054,48 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setRundown((prev) =>
       [...prev, newItem].sort((a, b) => a.startTime.localeCompare(b.startTime))
     );
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan agenda rundown: ${item.activity}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan agenda rundown: ${item.activity} (${item.startTime} - ${item.endTime})`,
+      {
+        actionType: "CREATE",
+        module: "RUNDOWN",
+        details: `Fase: ${item.phase}, Lokasi: ${item.location}, PIC: ${item.picName}`,
+      }
+    );
   };
 
   const editRundown = (item: RundownItem) => {
     setRundown((prev) =>
       prev.map((r) => (r.id === item.id ? item : r)).sort((a, b) => a.startTime.localeCompare(b.startTime))
     );
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui agenda rundown: ${item.activity} (${item.startTime} - ${item.endTime})`,
+      {
+        actionType: "UPDATE",
+        module: "RUNDOWN",
+        details: `Fase: ${item.phase}, PIC: ${item.picName}`,
+      }
+    );
   };
 
   const deleteRundown = (id: string) => {
+    const target = rundown.find((r) => r.id === id);
     trackDeletedId(id);
     setRundown((prev) => prev.filter((r) => r.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus agenda rundown: "${target?.activity || "Agenda"}" (${target?.startTime || ""})`,
+      {
+        actionType: "DELETE",
+        module: "RUNDOWN",
+        details: target ? `Fase: ${target.phase}, PIC: ${target.picName}` : undefined,
+      }
+    );
   };
 
   const addBudgetCategory = (item: Omit<BudgetCategory, "id">) => {
@@ -1627,16 +2104,46 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       ...item,
     };
     setBudgetCategories((prev) => [newItem, ...prev]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan pos anggaran: ${item.name}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan pos anggaran: ${item.name} (Alokasi: Rp ${item.allocated.toLocaleString("id-ID")})`,
+      {
+        actionType: "CREATE",
+        module: "BUDGET",
+        details: `Alokasi: Rp ${item.allocated.toLocaleString("id-ID")}, Vendor: ${item.vendor || "-"}`,
+      }
+    );
   };
 
   const updateBudgetCategory = (item: BudgetCategory) => {
     setBudgetCategories((prev) => prev.map((b) => (b.id === item.id ? item : b)));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui pos anggaran: ${item.name} (Alokasi: Rp ${item.allocated.toLocaleString("id-ID")}, Terpakai: Rp ${item.spent.toLocaleString("id-ID")})`,
+      {
+        actionType: "UPDATE",
+        module: "BUDGET",
+        details: `Status: ${item.status}, Vendor: ${item.vendor || "-"}`,
+      }
+    );
   };
 
   const deleteBudgetCategory = (id: string) => {
+    const target = budgetCategories.find((b) => b.id === id);
     trackDeletedId(id);
     setBudgetCategories((prev) => prev.filter((b) => b.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus pos anggaran: "${target?.name || "Anggaran"}" (Alokasi: Rp ${(target?.allocated || 0).toLocaleString("id-ID")})`,
+      {
+        actionType: "DELETE",
+        module: "BUDGET",
+        details: target ? `Terpakai: Rp ${target.spent.toLocaleString("id-ID")}` : undefined,
+      }
+    );
   };
 
   const addVendor = (item: Omit<VendorMilestone, "id">) => {
@@ -1645,37 +2152,95 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       ...item,
     };
     setVendors((prev) => [newItem, ...prev]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan kontrak vendor: ${item.vendorName}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan kontrak vendor: ${item.vendorName} (${item.serviceType}, Nilai: Rp ${item.totalContract.toLocaleString("id-ID")})`,
+      {
+        actionType: "CREATE",
+        module: "VENDORS",
+        details: `Layanan: ${item.serviceType}, Kontak: ${item.contactPerson || "-"} (${item.contactPhone || "-"})`,
+      }
+    );
   };
 
   const editVendor = (item: VendorMilestone) => {
     setVendors((prev) => prev.map((v) => (v.id === item.id ? item : v)));
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Memperbarui kontrak vendor: ${item.vendorName}`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui kontrak vendor: ${item.vendorName} (Nilai Kontrak: Rp ${item.totalContract.toLocaleString("id-ID")})`,
+      {
+        actionType: "UPDATE",
+        module: "VENDORS",
+        details: `Layanan: ${item.serviceType}, Kontak: ${item.contactPerson || "-"}`,
+      }
+    );
   };
 
   const toggleVendorStage = (vendorId: string, stageIdx: number) => {
+    let vendorName = "";
+    let stageName = "";
+    let stageAmount = 0;
+    let willBePaid = false;
+
     setVendors((prev) =>
       prev.map((vm) => {
         if (vm.id === vendorId) {
-          const updatedStages = vm.stages.map((stage, i) =>
-            i === stageIdx ? { ...stage, isPaid: !stage.isPaid } : stage
-          );
+          vendorName = vm.vendorName;
+          const updatedStages = vm.stages.map((stage, i) => {
+            if (i === stageIdx) {
+              willBePaid = !stage.isPaid;
+              stageName = stage.name;
+              stageAmount = stage.amount;
+              return { ...stage, isPaid: willBePaid };
+            }
+            return stage;
+          });
           return { ...vm, stages: updatedStages };
         }
         return vm;
       })
     );
+
+    if (vendorName) {
+      addActivity(
+        currentUser?.name || "Calon Pengantin",
+        currentUser?.role || "GROOM",
+        willBePaid
+          ? `Membayar termin vendor: ${vendorName} - ${stageName} (Rp ${stageAmount.toLocaleString("id-ID")})`
+          : `Membatalkan status bayar termin vendor: ${vendorName} - ${stageName}`,
+        {
+          actionType: "PAYMENT",
+          module: "VENDORS",
+          details: willBePaid ? `Termin senilai Rp ${stageAmount.toLocaleString("id-ID")} lunas terbayar` : "Status pembayaran dikembalikan ke belum bayar",
+        }
+      );
+    }
   };
 
   const deleteVendor = (id: string) => {
+    const target = vendors.find((v) => v.id === id);
     trackDeletedId(id);
     setVendors((prev) => prev.filter((v) => v.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus kontrak vendor: "${target?.vendorName || "Vendor"}" (${target?.serviceType || ""})`,
+      {
+        actionType: "DELETE",
+        module: "VENDORS",
+        details: target ? `Nilai kontrak Rp ${target.totalContract.toLocaleString("id-ID")} dihapus` : undefined,
+      }
+    );
   };
 
   const updateAlignmentAnswer = (id: string, role: "GROOM" | "BRIDE", answer: string) => {
+    let topicQuestion = "";
     setAlignmentTopics((prev) =>
       prev.map((t) => {
         if (t.id === id) {
+          topicQuestion = t.question;
           const updated = {
             ...t,
             groomAnswer: role === "GROOM" ? answer : t.groomAnswer,
@@ -1685,6 +2250,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         }
         return t;
       })
+    );
+    addActivity(
+      currentUser?.name || (role === "GROOM" ? "Calon Suami" : "Calon Istri"),
+      role,
+      `Mengisi pandangan pranikah (${role === "GROOM" ? "Calon Suami" : "Calon Istri"}): "${topicQuestion.substring(0, 35)}..."`,
+      {
+        actionType: "UPDATE",
+        module: "ALIGNMENT",
+        details: "Jawaban diperbarui di pojok bicara",
+      }
     );
   };
 
@@ -1705,7 +2280,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       const actionText = nextAgreed
         ? `Menyepakati topik diskusi pranikah: "${targetQuestion.substring(0, 35)}..."`
         : `Membatalkan kesepakatan topik: "${targetQuestion.substring(0, 35)}..."`;
-      addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", actionText);
+      addActivity(
+        currentUser?.name || "Calon Pengantin",
+        currentUser?.role || "GROOM",
+        actionText,
+        {
+          actionType: "STATUS",
+          module: "ALIGNMENT",
+          details: nextAgreed ? "Topik telah disepakati bersama pasangan" : "Kesepakatan topik dibatalkan",
+        }
+      );
     }
   };
 
@@ -1719,19 +2303,48 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       isAgreed: false,
     };
     setAlignmentTopics((prev) => [...prev, newTopic]);
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", `Menambahkan topik pranikah: "${question.substring(0, 35)}..."`);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan topik pranikah: "${question.substring(0, 35)}..."`,
+      {
+        actionType: "CREATE",
+        module: "ALIGNMENT",
+        details: `Kategori: ${category}`,
+      }
+    );
   };
 
   const editAlignmentTopic = (id: string, question: string, category: AlignmentTopic["category"]) => {
     setAlignmentTopics((prev) =>
       prev.map((t) => (t.id === id ? { ...t, question, category } : t))
     );
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui topik pranikah: "${question.substring(0, 35)}..."`,
+      {
+        actionType: "UPDATE",
+        module: "ALIGNMENT",
+        details: `Kategori: ${category}`,
+      }
+    );
   };
 
   const deleteAlignmentTopic = (id: string) => {
+    const target = alignmentTopics.find((t) => t.id === id);
     trackDeletedId(id);
     setAlignmentTopics((prev) => prev.filter((t) => t.id !== id));
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Menghapus topik diskusi pranikah");
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus topik diskusi pranikah: "${target?.question ? target.question.substring(0, 35) + "..." : "Topik"}"`,
+      {
+        actionType: "DELETE",
+        module: "ALIGNMENT",
+        details: target ? `Kategori: ${target.category}` : undefined,
+      }
+    );
   };
 
   const loadRecommendedAlignmentTopics = () => {
@@ -1742,22 +2355,57 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         .map((t) => ({ ...t, id: `top-${crypto.randomUUID()}` }));
       return [...prev, ...newTopics];
     });
-    addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Memuat rekomendasi topik diskusi pranikah");
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      "Memuat rekomendasi topik diskusi pranikah",
+      {
+        actionType: "CREATE",
+        module: "ALIGNMENT",
+        details: "5 topik penting panduan pernikahan keluarga, finansial, & karir",
+      }
+    );
   };
 
   const toggleAdminRequirement = (stepId: string, reqId: string) => {
+    let stepName = "";
+    let reqTitle = "";
+    let willBeDone = false;
+
     setAdminSteps((prev) =>
-      prev.map((step) =>
-        step.id === stepId
-          ? {
-              ...step,
-              requirements: step.requirements.map((r) =>
-                r.id === reqId ? { ...r, isDone: !r.isDone } : r
-              ),
-            }
-          : step
-      )
+      prev.map((step) => {
+        if (step.id === stepId) {
+          stepName = step.stageName;
+          return {
+            ...step,
+            requirements: step.requirements.map((r) => {
+              if (r.id === reqId) {
+                willBeDone = !r.isDone;
+                reqTitle = r.title;
+                return { ...r, isDone: willBeDone };
+              }
+              return r;
+            }),
+          };
+        }
+        return step;
+      })
     );
+
+    if (reqTitle) {
+      addActivity(
+        currentUser?.name || "Calon Pengantin",
+        currentUser?.role || "GROOM",
+        willBeDone
+          ? `Menyelesaikan berkas administrasi KUA: "${reqTitle}" (${stepName})`
+          : `Membatalkan status berkas KUA: "${reqTitle}"`,
+        {
+          actionType: "STATUS",
+          module: "ADMINISTRATION",
+          details: willBeDone ? `Tahapan: ${stepName} (Terpenuhi)` : `Tahapan: ${stepName} (Belum Lengkap)`,
+        }
+      );
+    }
   };
 
   // Clear data to completely empty state
@@ -1781,7 +2429,16 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       currentSavings: 0,
     }));
     localStorage.removeItem(STORAGE_KEY);
-    addActivity(currentUser?.name || "Pengguna", currentUser?.role || "GROOM", "Mengosongkan seluruh data rencana pernikahan");
+    addActivity(
+      currentUser?.name || "Pengguna",
+      currentUser?.role || "GROOM",
+      "Mengosongkan seluruh data rencana pernikahan",
+      {
+        actionType: "DELETE",
+        module: "WORKSPACE",
+        details: "Semua data modul direset ke kondisi bersih",
+      }
+    );
   };
 
   // Clean template / reset

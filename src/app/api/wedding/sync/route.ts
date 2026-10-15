@@ -486,13 +486,16 @@ export async function POST(req: NextRequest) {
           userName: guest.name,
           userRole: "COLLABORATOR",
           action: `Mengonfirmasi kehadiran via Undangan Digital (${guest.rsvpStatus === "CONFIRMED_ATTENDING" ? `Hadir ${guest.pax || 2} Pax` : "Tidak Hadir"})`,
+          actionType: "STATUS",
+          module: "GUESTS",
+          details: `Konfirmasi kehadiran ${guest.pax || 2} Pax melalui tautan undangan digital publik`,
           timeAgo: "Baru saja",
           timestamp: now,
           createdAt: new Date(now).toISOString(),
         });
 
         planData.guests = guests;
-        planData.activityLogs = activityLogs.slice(0, 200);
+        planData.activityLogs = activityLogs.slice(0, 500);
 
         const updateResult = await sql`
           UPDATE weddings SET
@@ -583,13 +586,16 @@ export async function POST(req: NextRequest) {
           userName: friendName.trim(),
           userRole: "COLLABORATOR",
           action: `Mengklaim kado pernikahan: "${claimedItemName}" dari wishlist`,
+          actionType: "CLAIM",
+          module: "POST_WEDDING",
+          details: `Dihadiahkan oleh ${friendName.trim()} melalui registry wishlist publik`,
           timeAgo: "Baru saja",
           timestamp: now,
           createdAt: new Date(now).toISOString(),
         });
 
         planData.postWedding = updatedPostWedding;
-        planData.activityLogs = activityLogs.slice(0, 200);
+        planData.activityLogs = activityLogs.slice(0, 500);
 
         const updateResult = await sql`
           UPDATE weddings SET

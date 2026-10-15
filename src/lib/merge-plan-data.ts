@@ -197,7 +197,7 @@ export function mergeActivityLogs(existingLogs: any[] = [], incomingLogs: any[] 
     return tB - tA;
   });
 
-  return result.slice(0, 200);
+  return result.slice(0, 500);
 }
 
 /**

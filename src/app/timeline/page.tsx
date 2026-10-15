@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   MapPin,
   Check,
@@ -12,6 +13,7 @@ import {
   CheckCircle2,
   Sparkles,
   Edit2,
+  Activity,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { ChecklistItem, TaskCategory } from "@/types";
@@ -161,6 +163,14 @@ export default function TimelinePage() {
               {completedCount} dari {checklist.length} tugas selesai
             </span>
           </div>
+
+          <Link
+            href="/activity"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 text-slate-800 font-bold text-xs border border-slate-200 shadow-xs transition-colors shrink-0 w-full sm:w-auto"
+          >
+            <Activity className="w-4 h-4 text-pastel-600" />
+            <span>Lihat Riwayat &amp; Audit</span>
+          </Link>
 
           <button
             id="tour-timeline-add"

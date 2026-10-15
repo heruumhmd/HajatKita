@@ -135,11 +135,41 @@ export interface GuestItem {
   notes?: string;
 }
 
+export type ActivityActionType =
+  | "CREATE"
+  | "UPDATE"
+  | "DELETE"
+  | "LOGIN"
+  | "LOGOUT"
+  | "STATUS"
+  | "PAYMENT"
+  | "CLAIM"
+  | "SYSTEM";
+
+export type ActivityModule =
+  | "AUTH"
+  | "PROFILE"
+  | "WEDDING"
+  | "BUDGET"
+  | "SAVINGS"
+  | "CHECKLIST"
+  | "SESERAHAN"
+  | "POST_WEDDING"
+  | "GUESTS"
+  | "RUNDOWN"
+  | "VENDORS"
+  | "ADMINISTRATION"
+  | "ALIGNMENT"
+  | "WORKSPACE";
+
 export interface ActivityLog {
   id: string;
   userName: string;
   userRole: RoleType;
   action: string;
+  actionType?: ActivityActionType;
+  module?: ActivityModule;
+  details?: string;
   timeAgo: string;
   timestamp?: number;
   createdAt?: string;
