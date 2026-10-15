@@ -20,6 +20,7 @@ import {
   Heart,
   HelpCircle,
   Menu,
+  Activity,
 } from "lucide-react";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
 import { useWedding } from "@/context/wedding-context";
@@ -43,6 +44,7 @@ const navItems: NavItem[] = [
   { label: "Administrasi KUA", href: "/administration", icon: FileCheck2 },
   { label: "Pojok Bicara", href: "/alignment", icon: HeartHandshake, badge: "Penting" },
   { label: "Proteksi Vendor", href: "/vendors", icon: ShieldCheck },
+  { label: "Riwayat Aktivitas", href: "/activity", icon: Activity },
   { label: "Akun & Pasangan", href: "/account", icon: User },
 ];
 

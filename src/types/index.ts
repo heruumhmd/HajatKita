@@ -142,6 +142,7 @@ export interface ActivityLog {
   action: string;
   timeAgo: string;
   timestamp?: number;
+  createdAt?: string;
 }
 
 export interface RundownItem {

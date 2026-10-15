@@ -1215,17 +1215,42 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     return true;
   };
 
-  // Helper to add activity log
+  // Helper to resolve accurate user name for activity logs
+  const getActorName = (preferredName?: string, userRole?: "GROOM" | "BRIDE" | "COLLABORATOR"): string => {
+    let name = (preferredName || "").trim();
+    const activeUser = currentUserRef.current;
+    if (!name || name === "Pengguna" || name === "Calon Pengantin") {
+      name = (activeUser?.name || activeUser?.nickname || "").trim();
+    }
+    if (!name) {
+      if (userRole === "BRIDE") {
+        name = (weddingRef.current.brideName || "").trim();
+      } else if (userRole === "GROOM") {
+        name = (weddingRef.current.groomName || "").trim();
+      }
+    }
+    if (!name) {
+      name = (weddingRef.current.groomName || weddingRef.current.brideName || "Calon Pengantin").trim();
+    }
+    return name;
+  };
+
+  // Helper to add activity log with real timestamps and 200 items retention
   const addActivity = (userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string) => {
+    const resolvedName = getActorName(userName, userRole);
+    const now = Date.now();
+    const isoString = new Date(now).toISOString();
+
     const newLog: ActivityLog = {
       id: `act-${crypto.randomUUID()}`,
-      userName,
+      userName: resolvedName,
       userRole,
       action,
       timeAgo: "Baru saja",
-      timestamp: Date.now(),
+      timestamp: now,
+      createdAt: isoString,
     };
-    setActivityLogs((prev) => [newLog, ...prev.slice(0, 19)]);
+    setActivityLogs((prev) => [newLog, ...prev.slice(0, 199)]);
   };
 
   // Actions

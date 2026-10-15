@@ -59,3 +59,63 @@ export function safeUrl(input?: string | null): string {
   }
 }
 
+export function parseActivityDate(timestamp?: number | string | Date | null): Date | null {
+  if (!timestamp) return null;
+  if (timestamp instanceof Date) {
+    return isNaN(timestamp.getTime()) ? null : timestamp;
+  }
+  if (typeof timestamp === "number") {
+    const d = new Date(timestamp);
+    return isNaN(d.getTime()) ? null : d;
+  }
+  const str = String(timestamp).trim();
+  const d = new Date(str);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+export function formatExactDateTime(timestamp?: number | string | Date | null): string {
+  const d = parseActivityDate(timestamp);
+  if (!d) return "";
+  
+  return new Intl.DateTimeFormat("id-ID", {
+    day: "numeric",
+    month: "short",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+    timeZone: "Asia/Jakarta",
+  }).format(d) + " WIB";
+}
+
+export function formatRelativeTime(
+  timestamp?: number | string | Date | null,
+  fallbackText = "Baru saja"
+): string {
+  const d = parseActivityDate(timestamp);
+  if (!d) return fallbackText;
+
+  const now = Date.now();
+  const diffMs = now - d.getTime();
+
+  if (diffMs < 0 || diffMs < 60000) return "Baru saja";
+  const diffMin = Math.floor(diffMs / 60000);
+  if (diffMin < 60) return `${diffMin} menit lalu`;
+  const diffHours = Math.floor(diffMin / 60);
+  if (diffHours < 24) return `${diffHours} jam lalu`;
+  const diffDays = Math.floor(diffHours / 24);
+  if (diffDays === 1) {
+    const timeStr = d.toLocaleTimeString("id-ID", {
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+      timeZone: "Asia/Jakarta",
+    });
+    return `Kemarin, ${timeStr} WIB`;
+  }
+  if (diffDays < 7) return `${diffDays} hari lalu`;
+
+  return formatExactDateTime(d);
+}
+
+
