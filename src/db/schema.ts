@@ -7,8 +7,9 @@ import {
   boolean,
   integer,
   uuid,
-  date,
+  index,
 } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 
 // 1. Users Table (NextAuth & App Compatible)
 export const users = pgTable("users", {
@@ -24,7 +25,9 @@ export const users = pgTable("users", {
   bio: text("bio"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index("idx_users_lower_email").on(sql`lower(${table.email})`),
+]);
 
 // 2. Shared Wedding Project Workspace
 export const weddings = pgTable("weddings", {
@@ -55,7 +58,13 @@ export const weddings = pgTable("weddings", {
   version: integer("version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index("idx_weddings_lower_primary").on(sql`lower(${table.primaryUserEmail})`),
+  index("idx_weddings_lower_partner_user").on(sql`lower(${table.partnerUserEmail})`),
+  index("idx_weddings_lower_partner").on(sql`lower(${table.partnerEmail})`),
+  index("idx_weddings_lower_slug").on(sql`lower(${table.slug})`),
+  index("idx_weddings_upper_invite_code").on(sql`upper(${table.inviteCode})`),
+]);
 
 // 3. Couple Pairing History (Tracks couple pairing & preserved workspace data upon reconnection)
 export const coupleHistory = pgTable("couple_history", {
@@ -67,7 +76,9 @@ export const coupleHistory = pgTable("couple_history", {
   unpairedAt: timestamp("unpaired_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  index("idx_couple_history_lower_users").on(sql`lower(${table.user1Email})`, sql`lower(${table.user2Email})`, table.status),
+]);
 
 // 4. Wedding Members (Suami, Istri, Kolaborator)
 export const weddingMembers = pgTable("wedding_members", {
