@@ -82,20 +82,24 @@ function GuestsContent() {
     familyQuota.brideParentsQuota;
   const quotaDifference = totalAllocatedQuota - familyQuota.venueCapacity;
 
-  const filteredGuests = guests.filter(
+  const s = (search || "").toLowerCase();
+  const safeGuestList = Array.isArray(guests) ? guests : [];
+
+  const filteredGuests = safeGuestList.filter(
     (g) =>
-      g.name.toLowerCase().includes(search.toLowerCase()) ||
-      g.category.toLowerCase().includes(search.toLowerCase())
+      Boolean(g) &&
+      ((g.name || "").toLowerCase().includes(s) ||
+        (g.category || "").toLowerCase().includes(s))
   );
 
-  const totalInvitedPax = guests.reduce((acc, curr) => acc + curr.pax, 0);
-  const confirmedPax = guests
-    .filter((g) => g.rsvpStatus === "CONFIRMED_ATTENDING")
-    .reduce((acc, curr) => acc + curr.pax, 0);
+  const totalInvitedPax = safeGuestList.reduce((acc, curr) => acc + (curr?.pax || 0), 0);
+  const confirmedPax = safeGuestList
+    .filter((g) => g && g.rsvpStatus === "CONFIRMED_ATTENDING")
+    .reduce((acc, curr) => acc + (curr?.pax || 0), 0);
 
-  const totalEnvelopes = guests
-    .filter((g) => g.envelopeAmount)
-    .reduce((acc, curr) => acc + (curr.envelopeAmount || 0), 0);
+  const totalEnvelopes = safeGuestList
+    .filter((g) => g && g.envelopeAmount)
+    .reduce((acc, curr) => acc + (curr?.envelopeAmount || 0), 0);
 
   const handleOpenAdd = () => {
     if (!requireAuth()) return;

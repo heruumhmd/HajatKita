@@ -445,11 +445,23 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       if (!query) return;
 
       const currentSeq = ++requestSeqRef.current;
-      const res = await fetch(`/api/wedding/sync?${query}`);
+      const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers["x-hajat-token"] = token;
+      }
+
+      const res = await fetch(`/api/wedding/sync?${query}`, { headers });
       const data = await res.json();
 
       // Drop stale response if a newer request was dispatched while this was in flight
       if (currentSeq !== requestSeqRef.current) return;
+
+      if (data.token && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("hajat_workspace_token", data.token);
+        } catch {}
+      }
 
       hasLoadedRemoteRef.current = true;
 
@@ -797,15 +809,21 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         inFlightRef.current = true;
         const activeUser = currentUserRef.current;
         const sentVersion = versionRef.current;
+        const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
+        const headers: Record<string, string> = { "Content-Type": "application/json" };
+        if (token) {
+          headers["x-hajat-token"] = token;
+        }
 
         try {
           const res = await fetch("/api/wedding/sync", {
             method: "POST",
-            headers: { "Content-Type": "application/json" },
+            headers,
             body: JSON.stringify({
               ...payloadToSave,
               baseVersion: sentVersion,
               user: activeUser,
+              token: token || undefined,
             }),
           });
           const resData = await res.json();
@@ -839,6 +857,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             if (retryTimeoutRef.current) {
               clearTimeout(retryTimeoutRef.current);
               retryTimeoutRef.current = null;
+            }
+
+            if (resData.token && typeof window !== "undefined") {
+              try {
+                localStorage.setItem("hajat_workspace_token", resData.token);
+              } catch {}
             }
 
             if (typeof resData.version === "number") {

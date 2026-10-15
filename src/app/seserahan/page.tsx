@@ -143,20 +143,24 @@ export default function SeserahanPage() {
     showToastSuccess(`"${item.name}" berhasil dihapus dari seserahan`);
   };
 
-  const filteredItems = seserahan.filter((item) => {
+  const q = (searchQuery || "").toLowerCase();
+  const safeSeserahanList = Array.isArray(seserahan) ? seserahan : [];
+
+  const filteredItems = safeSeserahanList.filter((item) => {
+    if (!item) return false;
     const matchBox = selectedBox === "ALL" || item.boxNumber === selectedBox;
     const matchSearch =
-      item.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.brand.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      item.category.toLowerCase().includes(searchQuery.toLowerCase());
+      (item.name || "").toLowerCase().includes(q) ||
+      (item.brand || "").toLowerCase().includes(q) ||
+      (item.category || "").toLowerCase().includes(q);
     return matchBox && matchSearch;
   });
 
-  const totalEstimated = seserahan.reduce((acc, curr) => acc + curr.estimatedPrice, 0);
-  const totalPurchased = seserahan
-    .filter((i) => i.isPurchased)
-    .reduce((acc, curr) => acc + (curr.actualPrice || curr.estimatedPrice), 0);
-  const purchasedCount = seserahan.filter((i) => i.isPurchased).length;
+  const totalEstimated = safeSeserahanList.reduce((acc, curr) => acc + (curr?.estimatedPrice || 0), 0);
+  const totalPurchased = safeSeserahanList
+    .filter((i) => i && i.isPurchased)
+    .reduce((acc, curr) => acc + (curr?.actualPrice || curr?.estimatedPrice || 0), 0);
+  const purchasedCount = safeSeserahanList.filter((i) => i && i.isPurchased).length;
 
   return (
     <div className="space-y-6">

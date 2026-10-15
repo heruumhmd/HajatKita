@@ -31,8 +31,8 @@ export default function ActivityHistoryPage() {
   const [selectedActor, setSelectedActor] = useState<"ALL" | "GROOM" | "BRIDE" | "COLLABORATOR">("ALL");
   const [selectedModule, setSelectedModule] = useState<string>("ALL");
 
-  const getActionIcon = (actionText: string) => {
-    const text = actionText.toLowerCase();
+  const getActionIcon = (actionText?: string) => {
+    const text = (actionText || "").toLowerCase();
     if (text.includes("tabungan") || text.includes("menyetor") || text.includes("setoran") || text.includes("pos anggaran") || text.includes("budget")) {
       return <Wallet className="w-4 h-4 text-pastel-600" />;
     }
@@ -91,7 +91,10 @@ export default function ActivityHistoryPage() {
 
   // Filter and search activities
   const filteredLogs = useMemo(() => {
-    return activityLogs.filter((log) => {
+    const safeLogs = Array.isArray(activityLogs) ? activityLogs : [];
+    return safeLogs.filter((log) => {
+      if (!log) return false;
+
       // 1. Actor filter
       if (selectedActor !== "ALL" && log.userRole !== selectedActor) {
         return false;
@@ -99,7 +102,7 @@ export default function ActivityHistoryPage() {
 
       // 2. Module filter
       if (selectedModule !== "ALL") {
-        const text = log.action.toLowerCase();
+        const text = (log.action || "").toLowerCase();
         if (selectedModule === "SESERAHAN" && !text.includes("seserahan")) return false;
         if (selectedModule === "TABUNGAN" && !text.includes("tabungan") && !text.includes("setoran") && !text.includes("anggaran") && !text.includes("budget")) return false;
         if (selectedModule === "CHECKLIST" && !text.includes("tugas") && !text.includes("checklist") && !text.includes("rundown") && !text.includes("agenda")) return false;

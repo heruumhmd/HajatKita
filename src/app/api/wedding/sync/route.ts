@@ -8,6 +8,7 @@ import { sql } from "@/db";
 import { auth } from "@/auth";
 import { findWeddingForEmail } from "@/db/find-wedding";
 import { mergePlanData } from "@/lib/merge-plan-data";
+import { createWorkspaceToken, verifyWorkspaceToken } from "@/lib/auth-token";
 import { z } from "zod";
 
 // In-memory rate limiting per IP (10 requests per minute)
@@ -122,10 +123,42 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 2. Authenticated Session or Registered Email Access for Full Workspace
+    // 2. Authenticated Session or Verified Workspace Token Access for Full Workspace
     const session = await auth();
     const sessionEmail = session?.user?.email?.toLowerCase().trim();
-    const email = sessionEmail || reqEmail;
+
+    // Check token from headers or query params
+    const rawToken =
+      req.headers.get("x-hajat-token") ||
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+      searchParams.get("token");
+
+    let tokenEmail: string | undefined;
+    if (rawToken) {
+      const verified = verifyWorkspaceToken(rawToken);
+      if (verified.valid && verified.email) {
+        tokenEmail = verified.email;
+      }
+    }
+
+    const authorizedEmail = sessionEmail || tokenEmail;
+
+    // SECURITY CHECK: If someone queries a raw ?email=victim@gmail.com without an active session or valid token
+    if (reqEmail && authorizedEmail && reqEmail !== authorizedEmail) {
+      return NextResponse.json(
+        { success: false, message: "Akses ditolak: Parameter email tidak sesuai dengan identitas autentikasi Anda." },
+        { status: 403 }
+      );
+    }
+
+    if (reqEmail && !authorizedEmail) {
+      return NextResponse.json(
+        { success: false, message: "Akses ditolak: Diperlukan sesi autentikasi atau token workspace yang sah untuk mengakses data ini." },
+        { status: 401 }
+      );
+    }
+
+    const email = authorizedEmail;
 
     if (!email) {
       // If unauthenticated and invite code is queried without user email, return only public subset
@@ -311,12 +344,15 @@ export async function GET(req: NextRequest) {
       } : undefined,
     };
 
+    const workspaceToken = createWorkspaceToken(email, weddingRow.id);
+
     return NextResponse.json({
       success: true,
       exists: true,
       wedding,
       user: userProfile,
       planData: parsedPlanData,
+      token: workspaceToken,
     });
   } catch (error: any) {
     console.error("Error in GET /api/wedding/sync:", error);
@@ -556,11 +592,29 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session or verified user email
+    // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session or verified workspace token
     const session = await auth();
-    const userEmail = session?.user?.email?.toLowerCase().trim() || body?.user?.email?.toLowerCase().trim();
+    const sessionEmail = session?.user?.email?.toLowerCase().trim();
+
+    const rawToken =
+      req.headers.get("x-hajat-token") ||
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+      body?.token;
+
+    let tokenEmail: string | undefined;
+    if (rawToken) {
+      const verified = verifyWorkspaceToken(rawToken);
+      if (verified.valid && verified.email) {
+        tokenEmail = verified.email;
+      }
+    }
+
+    const userEmail = sessionEmail || tokenEmail;
     if (!userEmail) {
-      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+      return NextResponse.json(
+        { success: false, message: "Akses ditolak: Sesi login atau token workspace yang sah diperlukan untuk menyimpan perubahan." },
+        { status: 401 }
+      );
     }
 
     const {
@@ -809,6 +863,7 @@ export async function POST(req: NextRequest) {
       inviteCode,
       version: savedWeddingVersion,
       planData: finalPlanData,
+      token: createWorkspaceToken(userEmail, savedWeddingId),
     });
   } catch (error: any) {
     console.error("Error in POST /api/wedding/sync:", error);

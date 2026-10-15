@@ -3,10 +3,43 @@ import { sql } from "@/db";
 import { auth } from "@/auth";
 import { findWeddingForEmail } from "@/db/find-wedding";
 
+// In-memory rate limiting against invite code brute-forcing (5 attempts per minute per IP)
+const pairRateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkPairRateLimit(ip: string, limit = 5, windowMs = 60 * 1000): boolean {
+  const now = Date.now();
+  const entry = pairRateLimitMap.get(ip);
+  if (!entry || now > entry.resetTime) {
+    pairRateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (entry.count >= limit) {
+    return false;
+  }
+  entry.count += 1;
+  return true;
+}
+
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.headers.get("x-real-ip") || "unknown";
+}
+
 export async function POST(req: NextRequest) {
   try {
     if (!sql) {
       return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+    }
+
+    const clientIp = getClientIp(req);
+    if (!checkPairRateLimit(clientIp)) {
+      return NextResponse.json(
+        { success: false, message: "Terlalu banyak percobaan memasangkan kode. Silakan tunggu 1 menit untuk mencoba kembali." },
+        { status: 429 }
+      );
     }
 
     const session = await auth();
