@@ -1,15 +1,21 @@
 import NextAuth from "next-auth";
 import Google from "next-auth/providers/google";
 
-// In production on Vercel, ensure NEXT_PUBLIC_APP_URL and/or AUTH_URL start with "https://".
-// REQUIREMENTS FOR __Host- COOKIE PREFIX IN PRODUCTION:
-// 1. Both process.env.NODE_ENV must be "production" and the configured URL must strictly start with "https://".
-// 2. If NEXT_PUBLIC_APP_URL or AUTH_URL is set to http:// in production, useSecureCookies evaluates to false,
-//    disabling the '__Host-' prefix and secure flag on session cookies. This can cause session dropouts,
-//    prevent session cookies from persisting across tabs/devices, and trigger authentication sync failures.
-// 3. For local development, http://localhost:3000 is used and useSecureCookies is disabled automatically.
-const isHttps = process.env.NEXT_PUBLIC_APP_URL?.startsWith("https://") || process.env.AUTH_URL?.startsWith("https://");
-const useSecureCookies = process.env.NODE_ENV === "production" && Boolean(isHttps);
+const isProduction = process.env.NODE_ENV === "production" || Boolean(process.env.VERCEL);
+
+// Always ensure production OAuth callback domain is https://hajatkita.vercel.app when running in production
+if (isProduction) {
+  const productionBase = "https://hajatkita.vercel.app";
+  if (!process.env.AUTH_URL || process.env.AUTH_URL.includes("localhost")) {
+    process.env.AUTH_URL = productionBase;
+  }
+  if (!process.env.NEXTAUTH_URL || process.env.NEXTAUTH_URL.includes("localhost")) {
+    process.env.NEXTAUTH_URL = productionBase;
+  }
+}
+
+const isHttps = process.env.AUTH_URL?.startsWith("https://") || isProduction;
+const useSecureCookies = isProduction && Boolean(isHttps);
 
 if (process.env.NODE_ENV === "production" && !process.env.AUTH_SECRET) {
   throw new Error("AUTH_SECRET environment variable is required in production");
