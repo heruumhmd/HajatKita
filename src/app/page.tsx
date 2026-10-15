@@ -7,12 +7,32 @@ import { SavingDonutCard } from "@/components/dashboard/saving-donut-card";
 import { FinancialGuardBanner } from "@/components/dashboard/financial-guard-banner";
 import { QuickChecklist } from "@/components/dashboard/quick-checklist";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
+import { FullLandingPage } from "@/components/landing/full-landing-page";
 import { Gift, Home, Users, ArrowRight, Sparkles, Heart, PlusCircle } from "lucide-react";
 import Link from "next/link";
 import { useWedding } from "@/context/wedding-context";
 
 export default function DashboardPage() {
-  const { seserahan, postWedding, guests, wedding } = useWedding();
+  const {
+    seserahan,
+    postWedding,
+    guests,
+    wedding,
+    isLoggedIn,
+    guestEnteredWorkspace,
+    setGuestEnteredWorkspace,
+    setIsAuthModalOpen,
+  } = useWedding();
+
+  // If user is a guest (not logged in) and hasn't clicked "Lihat Fitur / Workspace", show full landing page
+  if (!isLoggedIn && !guestEnteredWorkspace) {
+    return (
+      <FullLandingPage
+        onEnterWorkspace={() => setGuestEnteredWorkspace(true)}
+        onOpenAuthModal={() => setIsAuthModalOpen(true)}
+      />
+    );
+  }
 
   const purchasedSeserahan = seserahan.filter((i) => i.isPurchased).length;
   const acquiredPostWedding = postWedding.filter((i) => i.isAcquired).length;
@@ -40,15 +60,16 @@ export default function DashboardPage() {
           </div>
 
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
-            <Link
-              href="/account?tab=landing"
+            <button
+              type="button"
+              onClick={() => setGuestEnteredWorkspace(false)}
               className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs shadow-2xs transition-colors shrink-0"
             >
               <Sparkles className="w-4 h-4 text-amber-600" />
-              <span>Lihat Showcase</span>
-            </Link>
+              <span>Buka Landing Page</span>
+            </button>
             <Link
-              href="/account?tab=manage"
+              href="/account"
               className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0"
             >
               <PlusCircle className="w-4 h-4" />

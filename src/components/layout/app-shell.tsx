@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
 import { AppSidebar } from "@/components/navigation/app-sidebar";
 import { SpotlightTour } from "@/components/modal/spotlight-tour";
@@ -13,12 +13,15 @@ import { useWedding } from "@/context/wedding-context";
 
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const router = useRouter();
   const [isMobileSidebarOpen, setIsMobileSidebarOpen] = useState(false);
 
   const {
     wedding,
     currentUser,
     isLoggedIn,
+    guestEnteredWorkspace,
+    setGuestEnteredWorkspace,
     setIsAuthModalOpen,
     setIsProfileModalOpen,
     setIsTourOpen,
@@ -27,9 +30,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const isPublicRoute =
     pathname.startsWith("/invitation/") || pathname.startsWith("/registry/");
 
+  const isLandingMode = pathname === "/" && !isLoggedIn && !guestEnteredWorkspace;
+
   // Auto-open spotlight tour once per page at initial visit, never repeatedly
   useEffect(() => {
-    if (!isPublicRoute && pathname) {
+    if (!isPublicRoute && !isLandingMode && pathname) {
       try {
         const pageKey = `HAJAT_TOUR_SEEN_${pathname}`;
         const hasSeenPageTour = localStorage.getItem(pageKey);
@@ -41,10 +46,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         console.error(e);
       }
     }
-  }, [isPublicRoute, pathname, setIsTourOpen]);
+  }, [isPublicRoute, isLandingMode, pathname, setIsTourOpen]);
 
-  if (isPublicRoute) {
-    return <>{children}</>;
+  if (isPublicRoute || isLandingMode) {
+    return (
+      <>
+        {children}
+        <AuthModal />
+        <ProfileModal />
+      </>
+    );
   }
 
   // Prioritas identitas pengguna & pasangan
@@ -182,12 +193,25 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 Mode Tamu: Masuk dengan Google agar seluruh data pernikahan tersimpan permanen di cloud.
               </span>
             </div>
-            <Link
-              href="/account?tab=landing"
-              className="text-pastel-700 hover:text-pastel-800 font-bold underline shrink-0 text-[11px] self-start sm:self-auto"
-            >
-              Lihat Showcase &amp; Testimoni →
-            </Link>
+            <div className="flex items-center gap-3 shrink-0 self-start sm:self-auto">
+              <button
+                type="button"
+                onClick={() => {
+                  setGuestEnteredWorkspace(false);
+                  router.push("/");
+                }}
+                className="text-slate-600 hover:text-slate-900 font-bold underline text-[11px]"
+              >
+                ← Buka Landing Page
+              </button>
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="text-pastel-700 hover:text-pastel-800 font-bold underline text-[11px]"
+              >
+                Masuk Cloud →
+              </button>
+            </div>
           </div>
         )}
 

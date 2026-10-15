@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useMemo, Suspense } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import {
   User,
   Heart,
@@ -24,11 +24,11 @@ import {
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
-import { GuestLandingView } from "@/components/account/guest-landing-view";
 import { formatRupiah } from "@/lib/utils";
 import { showToastSuccess, showToastInfo, showConfirmDialog, showSuccessAlert, showErrorAlert } from "@/lib/swal";
 
 function AccountPageContent() {
+  const router = useRouter();
   const searchParams = useSearchParams();
   const joinParam = searchParams.get("join")?.trim().toUpperCase();
 
@@ -45,6 +45,7 @@ function AccountPageContent() {
     syncNow,
     refreshWorkspace,
     setIsAuthModalOpen,
+    setGuestEnteredWorkspace,
     logout,
   } = useWedding();
 
@@ -71,25 +72,6 @@ function AccountPageContent() {
     showToastSuccess("Sedang keluar dari akun...");
     await logout();
   };
-
-  // View mode: "landing" for guest landing page or "manage" for account & settings form
-  const [viewMode, setViewMode] = useState<"landing" | "manage">(() => {
-    if (typeof window !== "undefined") {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("tab") === "manage") return "manage";
-      if (urlParams.get("tab") === "landing") return "landing";
-    }
-    return !currentUser ? "landing" : "manage";
-  });
-
-  useEffect(() => {
-    if (currentUser) {
-      const urlParams = new URLSearchParams(window.location.search);
-      if (urlParams.get("tab") !== "landing") {
-        setViewMode("manage");
-      }
-    }
-  }, [currentUser]);
 
   // Form states initialized with wedding context
   const [groomName, setGroomName] = useState(wedding.groomName || "");
@@ -310,24 +292,6 @@ function AccountPageContent() {
     showSuccessAlert("Data Rencana Dikosongkan", "Semua data rencana berhasil dikosongkan. Data profil pernikahan Anda tetap tersimpan!");
   };
 
-  if (viewMode === "landing") {
-    return (
-      <div className="space-y-6">
-        <GuestLandingView
-          onOpenAuthModal={() => setIsAuthModalOpen(true)}
-          onSwitchToLocalMode={() => setViewMode("manage")}
-          partnerCodeInput={partnerCodeInput}
-          setPartnerCodeInput={setPartnerCodeInput}
-          onPairWithPartner={handlePairing}
-          pairingLoading={pairingLoading}
-          inviteCode={wedding.inviteCode}
-          isLoggedIn={Boolean(currentUser)}
-          userName={currentUser?.nickname || currentUser?.name || wedding.groomName || wedding.brideName}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Top Banner */}
@@ -349,11 +313,14 @@ function AccountPageContent() {
         <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
           <button
             type="button"
-            onClick={() => setViewMode("landing")}
+            onClick={() => {
+              setGuestEnteredWorkspace(false);
+              router.push("/");
+            }}
             className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 font-bold text-xs shadow-2xs transition-colors"
           >
             <Sparkles className="w-3.5 h-3.5 text-pastel-600" />
-            <span>Showcase &amp; Testimoni</span>
+            <span>Buka Landing Page</span>
           </button>
 
           {currentUser && (
@@ -411,10 +378,13 @@ function AccountPageContent() {
           <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto pt-1 sm:pt-0">
             <button
               type="button"
-              onClick={() => setViewMode("landing")}
+              onClick={() => {
+                setGuestEnteredWorkspace(false);
+                router.push("/");
+              }}
               className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs shadow-2xs transition-colors"
             >
-              ← Lihat Landing Page
+              ← Buka Landing Page
             </button>
             <button
               type="button"

@@ -182,6 +182,8 @@ interface WeddingContextType {
   setIsProfileModalOpen: (open: boolean) => void;
   isTourOpen: boolean;
   setIsTourOpen: (open: boolean) => void;
+  guestEnteredWorkspace: boolean;
+  setGuestEnteredWorkspace: (val: boolean) => void;
 
   // Data
   savingContributions: SavingContribution[];
@@ -371,6 +373,25 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const [isAuthModalOpen, setIsAuthModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isTourOpen, setIsTourOpen] = useState(false);
+  const [guestEnteredWorkspace, setGuestEnteredWorkspace] = useState<boolean>(() => {
+    if (typeof window !== "undefined") {
+      return sessionStorage.getItem("HAJAT_GUEST_ENTERED_WORKSPACE") === "true";
+    }
+    return false;
+  });
+
+  const handleSetGuestEnteredWorkspace = useCallback((val: boolean) => {
+    setGuestEnteredWorkspace(val);
+    if (typeof window !== "undefined") {
+      try {
+        if (val) {
+          sessionStorage.setItem("HAJAT_GUEST_ENTERED_WORKSPACE", "true");
+        } else {
+          sessionStorage.removeItem("HAJAT_GUEST_ENTERED_WORKSPACE");
+        }
+      } catch (e) {}
+    }
+  }, []);
 
   // States - Clean & Empty by default
   const [wedding, setWedding] = useState<WeddingProject>(cleanEmptyWedding);
@@ -1368,6 +1389,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     inFlightRef.current = false;
     dirtyAfterFlightRef.current = false;
 
+    handleSetGuestEnteredWorkspace(false);
+
     // 6. Explicitly expire session cookies client-side
     try {
       document.cookie = "authjs.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
@@ -1378,14 +1401,14 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
     // 7. Invoke NextAuth signOut to destroy server session
     try {
-      await signOut({ callbackUrl: "/account?tab=landing", redirect: false });
+      await signOut({ callbackUrl: "/", redirect: false });
     } catch (e) {
       console.warn("SignOut error", e);
     }
 
-    // 8. Hard browser navigation to completely dump in-memory caches, router cache, and react context
+    // 8. Hard browser navigation to / to completely dump in-memory caches, router cache, and react context
     if (typeof window !== "undefined") {
-      window.location.href = "/account?tab=landing";
+      window.location.href = "/";
     }
   };
 
@@ -2515,6 +2538,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setIsProfileModalOpen,
         isTourOpen,
         setIsTourOpen,
+
+        guestEnteredWorkspace,
+        setGuestEnteredWorkspace: handleSetGuestEnteredWorkspace,
 
         savingContributions,
         checklist,
