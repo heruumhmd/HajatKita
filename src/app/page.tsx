@@ -39,13 +39,22 @@ export default function DashboardPage() {
             </div>
           </div>
 
-          <Link
-            href="/account"
-            className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0 self-start sm:self-center"
-          >
-            <PlusCircle className="w-4 h-4" />
-            <span>Atur Nama &amp; Tanggal Acara</span>
-          </Link>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-center">
+            <Link
+              href="/account?tab=landing"
+              className="inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs shadow-2xs transition-colors shrink-0"
+            >
+              <Sparkles className="w-4 h-4 text-amber-600" />
+              <span>Lihat Showcase</span>
+            </Link>
+            <Link
+              href="/account?tab=manage"
+              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors shrink-0"
+            >
+              <PlusCircle className="w-4 h-4" />
+              <span>Atur Profil Pernikahan</span>
+            </Link>
+          </div>
         </div>
       )}
 

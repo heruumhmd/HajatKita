@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { usePathname } from "next/navigation";
+import Link from "next/link";
 import { AppSidebar } from "@/components/navigation/app-sidebar";
 import { SpotlightTour } from "@/components/modal/spotlight-tour";
 import { AuthModal } from "@/components/auth/auth-modal";
@@ -174,11 +175,19 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* Not Logged In Warning Callout */}
         {!isLoggedIn && (
-          <div className="bg-amber-50/90 border-b border-amber-200/80 px-4 py-2 flex items-center gap-2 text-xs text-amber-900">
-            <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
-            <span>
-              Mode Tamu: Masuk dengan Google atau akun Anda agar seluruh data pernikahan tersimpan permanen di database.
-            </span>
+          <div className="bg-amber-50/90 border-b border-amber-200/80 px-4 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs text-amber-900">
+            <div className="flex items-center gap-2 min-w-0">
+              <ShieldAlert className="w-4 h-4 text-amber-700 shrink-0" />
+              <span className="truncate">
+                Mode Tamu: Masuk dengan Google agar seluruh data pernikahan tersimpan permanen di cloud.
+              </span>
+            </div>
+            <Link
+              href="/account?tab=landing"
+              className="text-pastel-700 hover:text-pastel-800 font-bold underline shrink-0 text-[11px] self-start sm:self-auto"
+            >
+              Lihat Showcase &amp; Testimoni →
+            </Link>
           </div>
         )}
 

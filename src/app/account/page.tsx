@@ -18,9 +18,12 @@ import {
   Sparkles,
   UserX,
   Link2,
+  Compass,
+  LogIn,
 } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
+import { GuestLandingView } from "@/components/account/guest-landing-view";
 import { formatRupiah } from "@/lib/utils";
 import { showToastSuccess, showToastInfo, showConfirmDialog, showSuccessAlert, showErrorAlert } from "@/lib/swal";
 
@@ -33,12 +36,14 @@ function AccountPageContent() {
     updateWedding,
     clearAllData,
     currentUser,
+    isLoggedIn,
     pairWithPartner,
     unpairPartner,
     generateNewInviteCode,
     requireAuth,
     syncNow,
     refreshWorkspace,
+    setIsAuthModalOpen,
   } = useWedding();
 
   const [copiedCode, setCopiedCode] = useState(false);
@@ -48,6 +53,25 @@ function AccountPageContent() {
   const [unpairingLoading, setUnpairingLoading] = useState(false);
   const [saveSuccess, setSaveSuccess] = useState(false);
   const [feedbackMessage, setFeedbackMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // View mode: "landing" for guest landing page or "manage" for account & settings form
+  const [viewMode, setViewMode] = useState<"landing" | "manage">(() => {
+    if (typeof window !== "undefined") {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("tab") === "manage") return "manage";
+      if (urlParams.get("tab") === "landing") return "landing";
+    }
+    return !currentUser ? "landing" : "manage";
+  });
+
+  useEffect(() => {
+    if (currentUser) {
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("tab") !== "landing") {
+        setViewMode("manage");
+      }
+    }
+  }, [currentUser]);
 
   // Form states initialized with wedding context
   const [groomName, setGroomName] = useState(wedding.groomName || "");
@@ -268,6 +292,24 @@ function AccountPageContent() {
     showSuccessAlert("Data Rencana Dikosongkan", "Semua data rencana berhasil dikosongkan. Data profil pernikahan Anda tetap tersimpan!");
   };
 
+  if (viewMode === "landing") {
+    return (
+      <div className="space-y-6">
+        <GuestLandingView
+          onOpenAuthModal={() => setIsAuthModalOpen(true)}
+          onSwitchToLocalMode={() => setViewMode("manage")}
+          partnerCodeInput={partnerCodeInput}
+          setPartnerCodeInput={setPartnerCodeInput}
+          onPairWithPartner={handlePairing}
+          pairingLoading={pairingLoading}
+          inviteCode={wedding.inviteCode}
+          isLoggedIn={Boolean(currentUser)}
+          userName={currentUser?.nickname || currentUser?.name || wedding.groomName || wedding.brideName}
+        />
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Top Banner */}
@@ -286,27 +328,74 @@ function AccountPageContent() {
           </div>
         </div>
 
-        {/* Linked Couple Header Chip */}
-        {wedding.isPartnerConnected && effectivePartner && (
-          <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 shadow-2xs self-start sm:self-center shrink-0">
-            <div className="flex -space-x-2 shrink-0">
-              <CuteAvatarBadge cardId={currentUser?.avatarCardId || "cat-prince"} size="xs" />
-              <CuteAvatarBadge cardId={effectivePartner.avatarCardId || "cat-princess"} size="xs" />
-            </div>
-            <div className="text-left">
-              <div className="flex items-center gap-1.5">
-                <span className="text-xs font-black text-slate-900 font-serif">
-                  {currentUser?.name || "Saya"} &amp; {effectivePartner.name}
-                </span>
-                <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
+        <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
+          <button
+            type="button"
+            onClick={() => setViewMode("landing")}
+            className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-2xl bg-white hover:bg-slate-50 border border-slate-200/90 text-slate-700 font-bold text-xs shadow-2xs transition-colors"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-pastel-600" />
+            <span>Showcase &amp; Testimoni</span>
+          </button>
+
+          {/* Linked Couple Header Chip */}
+          {wedding.isPartnerConnected && effectivePartner && (
+            <div className="inline-flex items-center gap-2.5 px-3.5 py-2 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-950 shadow-2xs">
+              <div className="flex -space-x-2 shrink-0">
+                <CuteAvatarBadge cardId={currentUser?.avatarCardId || "cat-prince"} size="xs" />
+                <CuteAvatarBadge cardId={effectivePartner.avatarCardId || "cat-princess"} size="xs" />
               </div>
-              <span className="text-[10px] font-bold text-emerald-700 block">
-                Saling Terhubung
+              <div className="text-left">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-xs font-black text-slate-900 font-serif">
+                    {currentUser?.name || "Saya"} &amp; {effectivePartner.name}
+                  </span>
+                  <Heart className="w-3.5 h-3.5 text-rose-500 fill-rose-500 shrink-0" />
+                </div>
+                <span className="text-[10px] font-bold text-emerald-700 block">
+                  Saling Terhubung
+                </span>
+              </div>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Offline Guest Mode Alert Banner */}
+      {!currentUser && (
+        <div className="p-4 sm:p-4.5 bg-gradient-to-r from-amber-50/90 via-white to-amber-50/70 border border-amber-200/90 rounded-3xl flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-2xs">
+          <div className="flex items-start sm:items-center gap-3">
+            <div className="w-9 h-9 rounded-2xl bg-amber-100 border border-amber-300 flex items-center justify-center text-amber-800 shrink-0">
+              <Compass className="w-4 h-4 text-amber-800" />
+            </div>
+            <div>
+              <span className="font-extrabold text-slate-900 block font-serif text-sm">
+                Mode Tamu / Offline Aktif
+              </span>
+              <span className="text-slate-600 text-[11px] leading-relaxed">
+                Anda sedang mengelola data lokal di peramban ini. Masuk dengan Google untuk mengunci sinkronisasi permanen bersama pasangan.
               </span>
             </div>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-2 shrink-0 self-start sm:self-auto pt-1 sm:pt-0">
+            <button
+              type="button"
+              onClick={() => setViewMode("landing")}
+              className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 font-bold text-xs shadow-2xs transition-colors"
+            >
+              ← Lihat Landing Page
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsAuthModalOpen(true)}
+              className="px-3.5 py-1.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors flex items-center gap-1.5"
+            >
+              <LogIn className="w-3.5 h-3.5" />
+              <span>Masuk Akun</span>
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Save Success Alert */}
       {saveSuccess && (
