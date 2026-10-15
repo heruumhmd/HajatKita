@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState } from "react";
+import Link from "next/link";
 import {
   Wallet,
   Plus,
@@ -11,6 +12,7 @@ import {
   DollarSign,
   Building,
   Edit2,
+  TrendingUp,
 } from "lucide-react";
 import { SavingDonutCard } from "@/components/dashboard/saving-donut-card";
 import { FinancialGuardBanner } from "@/components/dashboard/financial-guard-banner";
@@ -137,15 +139,24 @@ export default function BudgetPage() {
           </div>
         </div>
 
-        <button
-          id="tour-budget-add"
-          type="button"
-          onClick={handleOpenAdd}
-          className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-all w-full sm:w-auto self-stretch sm:self-auto"
-        >
-          <Plus className="w-4 h-4" />
-          <span>Tambah Pos Anggaran</span>
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto self-stretch sm:self-auto">
+          <Link
+            href="/savings"
+            className="inline-flex items-center justify-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs shadow-2xs transition-colors flex-1 sm:flex-initial"
+          >
+            <TrendingUp className="w-4 h-4 text-emerald-600" />
+            <span>Tabungan Masa Depan →</span>
+          </Link>
+          <button
+            id="tour-budget-add"
+            type="button"
+            onClick={handleOpenAdd}
+            className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-all flex-1 sm:flex-initial"
+          >
+            <Plus className="w-4 h-4" />
+            <span>Tambah Pos Anggaran</span>
+          </button>
+        </div>
       </div>
 
       {/* Saving Donut Chart Component */}
@@ -155,6 +166,30 @@ export default function BudgetPage() {
 
       {/* Financial Health Guard Banner */}
       <FinancialGuardBanner />
+
+      {/* Life Goals Teaser Banner */}
+      <div className="bg-gradient-to-r from-emerald-50 via-white to-pastel-50 p-4 sm:p-5 rounded-3xl border border-emerald-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-100 border border-emerald-300 flex items-center justify-center text-emerald-800 shrink-0">
+            <TrendingUp className="w-5 h-5 text-emerald-700" />
+          </div>
+          <div>
+            <span className="font-extrabold text-slate-900 block font-serif text-sm">
+              Tabungan Masa Depan: DP KPR, Kendaraan, Anak, &amp; Haji
+            </span>
+            <span className="text-slate-600 text-[11px] leading-relaxed">
+              Kawal rencana finansial jangka panjang keluarga berdua dengan kalkulator simulasi KPR, inflasi sekolah anak, dan porsi haji.
+            </span>
+          </div>
+        </div>
+        <Link
+          href="/savings"
+          className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-emerald-700 hover:bg-emerald-800 text-white font-bold text-xs shadow-xs transition-colors shrink-0 self-start sm:self-auto"
+        >
+          <span>Buka Life Goals</span>
+          <ArrowUpRight className="w-4 h-4" />
+        </Link>
+      </div>
 
       {/* Category Expenses Breakdown Table */}
       <div id="tour-budget-categories" className="bg-white rounded-3xl p-6 border border-slate-200/90 shadow-subtle-sm space-y-4">

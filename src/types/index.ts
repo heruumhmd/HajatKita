@@ -82,6 +82,64 @@ export interface SavingContribution {
   color: string;
 }
 
+export type LifeSavingsCategory =
+  | "RUMAH_KPR"
+  | "KENDARAAN"
+  | "HARI_TUA"
+  | "INVESTASI"
+  | "PENDIDIKAN_ANAK"
+  | "HAJI_UMROH"
+  | "DANA_DARURAT"
+  | "LAINNYA";
+
+export interface LifeSavingsDeposit {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  contributor: "GROOM" | "BRIDE" | "BOTH";
+  notes?: string;
+  receiptNumber?: string;
+}
+
+export interface LifeSavingsGoal {
+  id: string;
+  title: string;
+  category: LifeSavingsCategory;
+  targetAmount: number;
+  currentAmount: number;
+  targetDate?: string;
+  monthlyCommitment?: number;
+  instrument?: string;
+  priority: "HIGH" | "MEDIUM" | "LOW";
+  notes?: string;
+  deposits: LifeSavingsDeposit[];
+  kprDetails?: {
+    propertyPrice?: number;
+    downPaymentPercent?: number;
+    tenorYears?: number;
+    interestRatePercent?: number;
+    estimatedMonthlyInstallment?: number;
+  };
+  educationDetails?: {
+    childStage?: "PERSALINAN" | "TK" | "SD" | "SMP" | "SMA" | "KULIAH";
+    yearsUntilNeeded?: number;
+    estimatedFutureCost?: number;
+  };
+  hajjDetails?: {
+    type?: "HAJI_REGULER" | "HAJI_PLUS" | "UMROH_DUO";
+    personsCount?: number;
+    targetPorsiCost?: number;
+  };
+  pensionDetails?: {
+    retirementAge?: number;
+    currentAge?: number;
+    monthlyLivingCost?: number;
+    inflationRatePercent?: number;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface ChecklistItem {
   id: string;
   title: string;
@@ -152,6 +210,7 @@ export type ActivityModule =
   | "WEDDING"
   | "BUDGET"
   | "SAVINGS"
+  | "LIFE_SAVINGS"
   | "CHECKLIST"
   | "SESERAHAN"
   | "POST_WEDDING"

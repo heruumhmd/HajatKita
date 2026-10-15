@@ -696,6 +696,7 @@ export async function POST(req: NextRequest) {
       alignmentTopics,
       adminSteps,
       activityLogs,
+      lifeGoals,
       user,
     } = body;
 
@@ -745,6 +746,7 @@ export async function POST(req: NextRequest) {
       alignmentTopics: alignmentTopics || [],
       adminSteps: adminSteps || [],
       activityLogs: activityLogs || [],
+      lifeGoals: lifeGoals || [],
       deletedItemIds: body?.deletedItemIds || [],
     };
 

@@ -8,9 +8,10 @@ import { FinancialGuardBanner } from "@/components/dashboard/financial-guard-ban
 import { QuickChecklist } from "@/components/dashboard/quick-checklist";
 import { ActivityFeed } from "@/components/dashboard/activity-feed";
 import { FullLandingPage } from "@/components/landing/full-landing-page";
-import { Gift, Home, Users, ArrowRight, Sparkles, Heart, PlusCircle } from "lucide-react";
+import { Gift, Home, Users, ArrowRight, Sparkles, Heart, PlusCircle, TrendingUp } from "lucide-react";
 import Link from "next/link";
 import { useWedding } from "@/context/wedding-context";
+import { formatShortRupiah } from "@/lib/utils";
 
 export default function DashboardPage() {
   const {
@@ -18,6 +19,7 @@ export default function DashboardPage() {
     postWedding,
     guests,
     wedding,
+    lifeGoals,
     isLoggedIn,
     guestEnteredWorkspace,
     setGuestEnteredWorkspace,
@@ -37,6 +39,7 @@ export default function DashboardPage() {
   const purchasedSeserahan = seserahan.filter((i) => i.isPurchased).length;
   const acquiredPostWedding = postWedding.filter((i) => i.isAcquired).length;
   const confirmedGuests = guests.filter((g) => g.rsvpStatus === "CONFIRMED_ATTENDING").length;
+  const totalLifeSavings = lifeGoals.reduce((acc, g) => acc + g.currentAmount, 0);
 
   const isProfileEmpty = !wedding.groomName || !wedding.brideName;
 
@@ -99,8 +102,31 @@ export default function DashboardPage() {
         <SavingDonutCard />
       </div>
 
-      {/* 5. 3-Card Quick Stats Overview */}
-      <div id="tour-quickstats" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      {/* 5. 4-Card Quick Stats Overview */}
+      <div id="tour-quickstats" className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        {/* Tabungan Masa Depan Card */}
+        <Link
+          href="/savings"
+          className="bg-white rounded-3xl p-5 border border-slate-200/90 hover:border-emerald-300 shadow-subtle-sm transition-all subtle-hover flex flex-col justify-between"
+        >
+          <div className="flex items-center justify-between mb-3">
+            <div className="w-10 h-10 rounded-2xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+              <TrendingUp className="w-5 h-5" />
+            </div>
+            <span className="text-[11px] font-bold text-emerald-800 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+              {formatShortRupiah(totalLifeSavings)} Terkumpul
+            </span>
+          </div>
+          <div>
+            <h3 className="font-extrabold text-slate-800 text-sm font-serif">Tabungan Masa Depan</h3>
+            <p className="text-[11px] text-slate-500 mt-0.5">DP KPR, mobil, haji, pensiun, &amp; anak</p>
+          </div>
+          <div className="mt-3 pt-3 border-t border-slate-100 flex items-center justify-between text-xs font-semibold text-emerald-700">
+            <span>Buka Life Goals ({lifeGoals.length})</span>
+            <ArrowRight className="w-3.5 h-3.5" />
+          </div>
+        </Link>
+
         {/* Seserahan Card */}
         <Link
           href="/seserahan"

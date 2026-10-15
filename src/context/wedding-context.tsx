@@ -20,6 +20,9 @@ import {
   ActivityModule,
   RSVPStatus,
   User,
+  LifeSavingsGoal,
+  LifeSavingsDeposit,
+  LifeSavingsCategory,
 } from "@/types";
 import { getDefaultCuteCardForRole } from "@/lib/cute-cards";
 import { showToastWarning } from "@/lib/swal";
@@ -198,6 +201,7 @@ interface WeddingContextType {
   alignmentTopics: AlignmentTopic[];
   adminSteps: AdminStep[];
   activityLogs: ActivityLog[];
+  lifeGoals: LifeSavingsGoal[];
 
   // Auth Actions
   login: (userData: Partial<User>) => void;
@@ -274,6 +278,14 @@ interface WeddingContextType {
       details?: string;
     }
   ) => void;
+
+  // Life Savings & Future Goals Actions
+  addLifeGoal: (goal: Omit<LifeSavingsGoal, "id" | "createdAt" | "updatedAt" | "deposits"> & { deposits?: LifeSavingsDeposit[] }) => void;
+  updateLifeGoal: (goal: LifeSavingsGoal) => void;
+  deleteLifeGoal: (id: string) => void;
+  addLifeGoalDeposit: (goalId: string, deposit: Omit<LifeSavingsDeposit, "id">) => void;
+  deleteLifeGoalDeposit: (goalId: string, depositId: string) => void;
+  loadTemplateLifeGoals: () => void;
 
   clearAllData: () => void;
   loadTemplateData: () => void;
@@ -407,6 +419,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const [alignmentTopics, setAlignmentTopics] = useState<AlignmentTopic[]>([]);
   const [adminSteps, setAdminSteps] = useState<AdminStep[]>(officialAdminSteps);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [lifeGoals, setLifeGoals] = useState<LifeSavingsGoal[]>([]);
   const [deletedItemIds, setDeletedItemIds] = useState<string[]>([]);
   const deletedItemIdsRef = useRef<Set<string>>(new Set());
 
@@ -496,6 +509,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    lifeGoals,
     deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
   }), [
     wedding,
@@ -511,6 +525,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    lifeGoals,
     deletedItemIds,
   ]);
 
@@ -682,6 +697,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         const incomingAlignmentTopics = Array.isArray(mergedPlan.alignmentTopics) ? mergedPlan.alignmentTopics : [];
         const incomingAdminSteps = Array.isArray(mergedPlan.adminSteps) && mergedPlan.adminSteps.length > 0 ? mergedPlan.adminSteps : officialAdminSteps;
         const incomingActivityLogs = Array.isArray(mergedPlan.activityLogs) ? mergedPlan.activityLogs : [];
+        const incomingLifeGoals = Array.isArray(mergedPlan.lifeGoals) ? mergedPlan.lifeGoals : [];
 
         setSavingContributions(incomingSavings);
         setChecklist(incomingChecklist);
@@ -695,6 +711,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setAlignmentTopics(incomingAlignmentTopics);
         setAdminSteps(incomingAdminSteps);
         setActivityLogs(incomingActivityLogs);
+        setLifeGoals(incomingLifeGoals);
 
         if (Array.isArray(mergedPlan.deletedItemIds)) {
           for (const dId of mergedPlan.deletedItemIds) {
@@ -720,6 +737,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           alignmentTopics: remotePlan.alignmentTopics || incomingAlignmentTopics,
           adminSteps: remotePlan.adminSteps || incomingAdminSteps,
           activityLogs: remotePlan.activityLogs || incomingActivityLogs,
+          lifeGoals: remotePlan.lifeGoals || incomingLifeGoals,
         });
       } else if (data.success && !data.exists) {
         hasLoadedRemoteRef.current = true;
@@ -806,6 +824,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           if (parsed.alignmentTopics) setAlignmentTopics(parsed.alignmentTopics);
           if (parsed.adminSteps) setAdminSteps(parsed.adminSteps);
           if (parsed.activityLogs) setActivityLogs(parsed.activityLogs);
+          if (parsed.lifeGoals) setLifeGoals(parsed.lifeGoals);
           if (Array.isArray(parsed.deletedItemIds)) {
             for (const dId of parsed.deletedItemIds) {
               deletedItemIdsRef.current.add(dId);
@@ -839,6 +858,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         alignmentTopics,
         adminSteps,
         activityLogs,
+        lifeGoals,
         deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
@@ -860,6 +880,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    lifeGoals,
     deletedItemIds,
   ]);
 
@@ -1453,6 +1474,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         const incomingAlignmentTopics = Array.isArray(p.alignmentTopics) ? p.alignmentTopics : [];
         const incomingAdminSteps = Array.isArray(p.adminSteps) && p.adminSteps.length > 0 ? p.adminSteps : officialAdminSteps;
         const incomingActivityLogs = Array.isArray(p.activityLogs) ? p.activityLogs : [];
+        const incomingLifeGoals = Array.isArray(p.lifeGoals) ? p.lifeGoals : [];
 
         setSavingContributions(incomingSavings);
         setChecklist(incomingChecklist);
@@ -1466,6 +1488,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setAlignmentTopics(incomingAlignmentTopics);
         setAdminSteps(incomingAdminSteps);
         setActivityLogs(incomingActivityLogs);
+        setLifeGoals(incomingLifeGoals);
 
         lastServerHashRef.current = hashPayload({
           wedding: result.wedding || weddingRef.current,
@@ -1481,6 +1504,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           alignmentTopics: incomingAlignmentTopics,
           adminSteps: incomingAdminSteps,
           activityLogs: incomingActivityLogs,
+          lifeGoals: incomingLifeGoals,
         });
       }
 
@@ -2485,6 +2509,317 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
   };
 
+  // Life Savings & Future Goals Actions
+  const addLifeGoal = (goal: Omit<LifeSavingsGoal, "id" | "createdAt" | "updatedAt" | "deposits"> & { deposits?: LifeSavingsDeposit[] }) => {
+    const id = `lg-${crypto.randomUUID()}`;
+    const now = new Date().toISOString();
+    const initialDeposits = goal.deposits || [];
+    const initialCurrent = initialDeposits.reduce((acc, d) => acc + (d.amount || 0), 0);
+    const newGoal: LifeSavingsGoal = {
+      ...goal,
+      id,
+      currentAmount: initialCurrent || goal.currentAmount || 0,
+      deposits: initialDeposits,
+      createdAt: now,
+      updatedAt: now,
+    };
+    setLifeGoals((prev) => [...prev, newGoal]);
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menambahkan target tabungan masa depan: "${newGoal.title}" (Target: Rp ${newGoal.targetAmount.toLocaleString("id-ID")})`,
+      {
+        actionType: "CREATE",
+        module: "SAVINGS",
+        details: `Kategori: ${newGoal.category}, Target: Rp ${newGoal.targetAmount.toLocaleString("id-ID")}`,
+      }
+    );
+  };
+
+  const updateLifeGoal = (goal: LifeSavingsGoal) => {
+    const now = new Date().toISOString();
+    setLifeGoals((prev) =>
+      prev.map((g) => (g.id === goal.id ? { ...goal, updatedAt: now } : g))
+    );
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Memperbarui target tabungan: "${goal.title}"`,
+      {
+        actionType: "UPDATE",
+        module: "SAVINGS",
+        details: `Target: Rp ${goal.targetAmount.toLocaleString("id-ID")}, Terkumpul: Rp ${goal.currentAmount.toLocaleString("id-ID")}`,
+      }
+    );
+  };
+
+  const deleteLifeGoal = (id: string) => {
+    const target = lifeGoals.find((g) => g.id === id);
+    trackDeletedId(id);
+    setLifeGoals((prev) => prev.filter((g) => g.id !== id));
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menghapus target tabungan: "${target?.title || "Impian Tabungan"}"`,
+      {
+        actionType: "DELETE",
+        module: "SAVINGS",
+        details: `Target tabungan senilai Rp ${(target?.targetAmount || 0).toLocaleString("id-ID")} dihapus`,
+      }
+    );
+  };
+
+  const addLifeGoalDeposit = (goalId: string, deposit: Omit<LifeSavingsDeposit, "id">) => {
+    const depositId = `dep-${crypto.randomUUID()}`;
+    const newDeposit: LifeSavingsDeposit = {
+      ...deposit,
+      id: depositId,
+    };
+    let goalTitle = "";
+    setLifeGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== goalId) return g;
+        goalTitle = g.title;
+        const updatedDeposits = [newDeposit, ...g.deposits];
+        const newTotal = updatedDeposits.reduce((acc, d) => acc + (d.amount || 0), 0);
+        return {
+          ...g,
+          deposits: updatedDeposits,
+          currentAmount: newTotal,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+    addActivity(
+      currentUser?.name || "Calon Pengantin",
+      currentUser?.role || "GROOM",
+      `Menyetor Rp ${deposit.amount.toLocaleString("id-ID")} ke "${goalTitle || "Tabungan Masa Depan"}"`,
+      {
+        actionType: "PAYMENT",
+        module: "SAVINGS",
+        details: `Penyetor: ${deposit.contributor}, Catatan: ${deposit.notes || "-"}`,
+      }
+    );
+  };
+
+  const deleteLifeGoalDeposit = (goalId: string, depositId: string) => {
+    trackDeletedId(depositId);
+    setLifeGoals((prev) =>
+      prev.map((g) => {
+        if (g.id !== goalId) return g;
+        const updatedDeposits = g.deposits.filter((d) => d.id !== depositId);
+        const newTotal = updatedDeposits.reduce((acc, d) => acc + (d.amount || 0), 0);
+        return {
+          ...g,
+          deposits: updatedDeposits,
+          currentAmount: newTotal,
+          updatedAt: new Date().toISOString(),
+        };
+      })
+    );
+  };
+
+  const loadTemplateLifeGoals = () => {
+    const now = new Date().toISOString();
+    const templates: LifeSavingsGoal[] = [
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "DP KPR & Rumah Pertama",
+        category: "RUMAH_KPR",
+        targetAmount: 120000000,
+        currentAmount: 25000000,
+        monthlyCommitment: 3500000,
+        instrument: "Reksadana Pasar Uang & Tabungan Bersama",
+        priority: "HIGH",
+        notes: "Target DP 15% + biaya provisi, notaris, BPHTB untuk rumah 2 lantai cluster",
+        kprDetails: {
+          propertyPrice: 650000000,
+          downPaymentPercent: 15,
+          tenorYears: 15,
+          interestRatePercent: 7.25,
+          estimatedMonthlyInstallment: 4950000,
+        },
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 30 * 86400000).toISOString().slice(0, 10),
+            amount: 15000000,
+            contributor: "GROOM",
+            notes: "Tabungan gaji & bonus calon suami",
+          },
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 15 * 86400000).toISOString().slice(0, 10),
+            amount: 10000000,
+            contributor: "BRIDE",
+            notes: "Tabungan calon istri untuk rumah pertama",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "Setoran Porsi Haji Reguler Berdua",
+        category: "HAJI_UMROH",
+        targetAmount: 50000000,
+        currentAmount: 20000000,
+        monthlyCommitment: 2000000,
+        instrument: "Tabungan Haji BSI / Bank Muamalat",
+        priority: "HIGH",
+        notes: "Daftar porsi haji Kemenag berdua (Rp 25.000.000 per orang untuk nomor porsi)",
+        hajjDetails: {
+          type: "HAJI_REGULER",
+          personsCount: 2,
+          targetPorsiCost: 50000000,
+        },
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 20 * 86400000).toISOString().slice(0, 10),
+            amount: 20000000,
+            contributor: "BOTH",
+            notes: "Setoran awal tabungan porsi haji berdua",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "Dana Darurat Keluarga (6 Bulan Pengeluaran)",
+        category: "DANA_DARURAT",
+        targetAmount: 48000000,
+        currentAmount: 18000000,
+        monthlyCommitment: 2500000,
+        instrument: "Reksadana Pasar Uang (Bibit / Bareksa) - Sangat Likuid",
+        priority: "HIGH",
+        notes: "Bantalan aman jika terjadi sakit, renovasi darurat, atau jeda karir (asumsi pengeluaran Rp 8jt/bulan)",
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 40 * 86400000).toISOString().slice(0, 10),
+            amount: 18000000,
+            contributor: "BOTH",
+            notes: "Akumulasi tabungan dana darurat sebelum menikah",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "Dana Persalinan & Aqiqah Anak Pertama",
+        category: "PENDIDIKAN_ANAK",
+        targetAmount: 30000000,
+        currentAmount: 5000000,
+        monthlyCommitment: 1500000,
+        instrument: "Tabungan Khusus Ibu & Bayi",
+        priority: "MEDIUM",
+        notes: "Persiapan persalinan caesar/normal RS Ibu Anak + aqiqah kambing + perlengkapan bayi newborn",
+        educationDetails: {
+          childStage: "PERSALINAN",
+          yearsUntilNeeded: 1,
+          estimatedFutureCost: 30000000,
+        },
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 10 * 86400000).toISOString().slice(0, 10),
+            amount: 5000000,
+            contributor: "GROOM",
+            notes: "Cicil persiapan anak pertama berdua",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "Investasi Logam Mulia Emas Antam (25 Gram)",
+        category: "INVESTASI",
+        targetAmount: 35000000,
+        currentAmount: 14000000,
+        monthlyCommitment: 2000000,
+        instrument: "Emas Batangan Antam / Pegadaian Digital",
+        priority: "MEDIUM",
+        notes: "Aset lindung nilai inflasi dan diversifikasi aset jangka panjang keluarga",
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 25 * 86400000).toISOString().slice(0, 10),
+            amount: 14000000,
+            contributor: "BOTH",
+            notes: "Beli fisik 10 gram emas Antam pertama",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "DP Mobil Keluarga (Low MPV)",
+        category: "KENDARAAN",
+        targetAmount: 60000000,
+        currentAmount: 10000000,
+        monthlyCommitment: 2000000,
+        instrument: "Tabungan Auto-Debit Berjangka",
+        priority: "LOW",
+        notes: "DP mobil keluarga 7-seater untuk mudik dan mobilitas keluarga besar",
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 5 * 86400000).toISOString().slice(0, 10),
+            amount: 10000000,
+            contributor: "GROOM",
+            notes: "Setoran tabungan mobil keluarga",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: `lg-${crypto.randomUUID()}`,
+        title: "Dana Hari Tua & Pensiun Mandiri (DPLK)",
+        category: "HARI_TUA",
+        targetAmount: 150000000,
+        currentAmount: 20000000,
+        monthlyCommitment: 1500000,
+        instrument: "DPLK Syariah & Portofolio Saham Dividen",
+        priority: "LOW",
+        notes: "Fondasi dana pensiun berdua untuk hari tua yang bermartabat dan mandiri finansial",
+        pensionDetails: {
+          retirementAge: 55,
+          currentAge: 27,
+          monthlyLivingCost: 10000000,
+          inflationRatePercent: 4.5,
+        },
+        deposits: [
+          {
+            id: `dep-${crypto.randomUUID()}`,
+            date: new Date(Date.now() - 60 * 86400000).toISOString().slice(0, 10),
+            amount: 20000000,
+            contributor: "BOTH",
+            notes: "Saldo akumulasi DPLK dan SBN awal",
+          },
+        ],
+        createdAt: now,
+        updatedAt: now,
+      },
+    ];
+    setLifeGoals(templates);
+    addActivity(
+      currentUser?.name || "Pengguna",
+      currentUser?.role || "GROOM",
+      "Memuat rekomendasi template 7 impian tabungan masa depan keluarga Indonesia",
+      {
+        actionType: "CREATE",
+        module: "SAVINGS",
+        details: "Rumah KPR, Haji, Dana Darurat, Persalinan Anak, Emas, Mobil, dan Pensiun",
+      }
+    );
+  };
+
   // Clear data to completely empty state
   const clearAllData = () => {
     setSavingContributions([]);
@@ -2498,6 +2833,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setAlignmentTopics([]);
     setAdminSteps(officialAdminSteps.map((s) => ({ ...s, requirements: s.requirements.map((r) => ({ ...r, isDone: false })) })));
     setActivityLogs([]);
+    setLifeGoals([]);
     deletedItemIdsRef.current.clear();
     setDeletedItemIds([]);
     setWedding((prev) => ({
@@ -2554,6 +2890,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         alignmentTopics,
         adminSteps,
         activityLogs,
+        lifeGoals,
 
         login,
         loginWithGoogle,
@@ -2607,6 +2944,14 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         loadRecommendedAlignmentTopics,
         toggleAdminRequirement,
         addActivity,
+
+        addLifeGoal,
+        updateLifeGoal,
+        deleteLifeGoal,
+        addLifeGoalDeposit,
+        deleteLifeGoalDeposit,
+        loadTemplateLifeGoals,
+
         clearAllData,
         loadTemplateData,
       }}

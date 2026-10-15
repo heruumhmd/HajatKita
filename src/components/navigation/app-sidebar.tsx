@@ -22,6 +22,7 @@ import {
   Menu,
   Activity,
   LogOut,
+  TrendingUp,
 } from "lucide-react";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
 import { useWedding } from "@/context/wedding-context";
@@ -38,7 +39,8 @@ const navItems: NavItem[] = [
   { label: "Dashboard", href: "/", icon: LayoutDashboard },
   { label: "Peta Persiapan", href: "/timeline", icon: MapPin },
   { label: "Alur Pernikahan", href: "/rundown", icon: GitFork },
-  { label: "Budget & Tabungan", href: "/budget", icon: Wallet },
+  { label: "Budget Pernikahan", href: "/budget", icon: Wallet },
+  { label: "Tabungan Masa Depan", href: "/savings", icon: TrendingUp, badge: "Life Goals" },
   { label: "Tamu & Hadiah", href: "/guests", icon: Users },
   { label: "Akad & Resepsi", href: "/ceremony", icon: Gem },
   { label: "Seserahan", href: "/seserahan", icon: Gift },

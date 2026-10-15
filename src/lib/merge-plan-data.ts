@@ -22,6 +22,7 @@ export interface PlanData {
   alignmentTopics?: any[];
   adminSteps?: any[];
   activityLogs?: any[];
+  lifeGoals?: any[];
   deletedItemIds?: string[];
 }
 
@@ -110,6 +111,20 @@ export function mergeEntityList<T extends { id?: string }>(
       // Preserve notes/details if incoming is empty but existing had content
       if (exAny.notes && !incAny.notes) {
         merged.notes = exAny.notes;
+      }
+
+      // Merge deposits array for life goals if present
+      if (Array.isArray(exAny.deposits) || Array.isArray(incAny.deposits)) {
+        const mergedDeposits = mergeEntityList(
+          exAny.deposits || [],
+          incAny.deposits || [],
+          undefined,
+          deletedIdsSet
+        );
+        merged.deposits = mergedDeposits;
+        if (mergedDeposits.length > 0) {
+          merged.currentAmount = mergedDeposits.reduce((acc: number, d: any) => acc + (d.amount || 0), 0);
+        }
       }
 
       if (merged.id) seenIds.add(merged.id);
@@ -284,6 +299,13 @@ export function mergePlanData(existing: PlanData = {}, incoming: PlanData = {}):
     ...(incoming.familyQuota || {}),
   };
 
+  const mergedLifeGoals = mergeEntityList(
+    existing.lifeGoals || [],
+    incoming.lifeGoals || [],
+    "title",
+    deletedSet
+  );
+
   return {
     savingContributions: mergedSavingContributions,
     checklist: mergedChecklist,
@@ -297,6 +319,7 @@ export function mergePlanData(existing: PlanData = {}, incoming: PlanData = {}):
     alignmentTopics: mergedAlignmentTopics,
     adminSteps: mergedAdminSteps,
     activityLogs: mergedActivityLogs,
+    lifeGoals: mergedLifeGoals,
     deletedItemIds: Array.from(deletedSet).slice(-500),
   };
 }
