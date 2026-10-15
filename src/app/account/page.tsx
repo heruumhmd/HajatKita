@@ -255,8 +255,8 @@ function AccountPageContent() {
   const handleClearAll = async () => {
     if (!requireAuth()) return;
     const isConfirmed = await showConfirmDialog({
-      title: "Kosongkan Semua Data?",
-      text: "Apakah Anda yakin ingin mengosongkan semua data? Seluruh data tamu, budget, checklist, rundown, dan seserahan akan dihapus bersih.",
+      title: "Kosongkan Semua Data Rencana?",
+      text: "Apakah Anda yakin ingin mengosongkan semua data rencana? Seluruh data tamu, budget, checklist, rundown, vendor, dan seserahan akan dihapus bersih (data profil pernikahan Anda tetap aman).",
       confirmButtonText: "Ya, Kosongkan",
       isDestructive: true,
       icon: "warning",
@@ -264,15 +264,8 @@ function AccountPageContent() {
     if (!isConfirmed) return;
 
     clearAllData();
-    setGroomName("");
-    setBrideName("");
-    setWeddingDate("");
-    setCity("");
-    setVenueName("");
-    setVenueAddress("");
     setTargetBudget("");
-    setSlug("");
-    showSuccessAlert("Data Dikosongkan", "Semua data rencana berhasil dikosongkan. Anda dapat mulai mengisi dari awal!");
+    showSuccessAlert("Data Rencana Dikosongkan", "Semua data rencana berhasil dikosongkan. Data profil pernikahan Anda tetap tersimpan!");
   };
 
   return (
