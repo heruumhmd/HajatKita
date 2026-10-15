@@ -38,10 +38,6 @@ function getClientIp(req: NextRequest): string {
 
 export async function GET(req: NextRequest) {
   try {
-    if (!sql) {
-      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
-    }
-
     const { searchParams } = new URL(req.url);
     const inviteCode = searchParams.get("code")?.trim().toUpperCase();
     const slug = searchParams.get("slug")?.trim().toLowerCase();
@@ -49,6 +45,9 @@ export async function GET(req: NextRequest) {
 
     // 1. Public Access: by slug (invitation & registry pages)
     if (slug) {
+      if (!sql) {
+        return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+      }
       const rows = await sql`
         SELECT * FROM weddings WHERE LOWER(slug) = ${slug} LIMIT 1
       `;
@@ -108,11 +107,10 @@ export async function GET(req: NextRequest) {
     }
     const sessionEmail = session?.user?.email?.toLowerCase().trim();
 
-    // Check token from headers or query params
+    // Check token strictly from headers (x-hajat-token or Authorization: Bearer)
     const rawToken =
       req.headers.get("x-hajat-token") ||
-      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
-      searchParams.get("token");
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
 
     let tokenEmail: string | undefined;
     if (rawToken) {
@@ -122,21 +120,7 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    let authorizedEmail = sessionEmail || tokenEmail;
-
-    // Device secret credential check:
-    // If mobile/tab has no active cookie session or token yet, check if reqEmail presents matching inviteCode
-    if (!authorizedEmail && reqEmail && inviteCode) {
-      const rows = await sql`
-        SELECT id FROM weddings
-        WHERE UPPER(invite_code) = ${inviteCode}
-          AND (LOWER(primary_user_email) = ${reqEmail} OR LOWER(partner_user_email) = ${reqEmail})
-        LIMIT 1
-      `;
-      if (rows && rows.length > 0) {
-        authorizedEmail = reqEmail;
-      }
-    }
+    const authorizedEmail = sessionEmail || tokenEmail;
 
     // SECURITY CHECK: If someone queries a raw ?email=victim@gmail.com without an active session, valid token, or matching invite code
     if (reqEmail && authorizedEmail && reqEmail !== authorizedEmail) {
@@ -158,6 +142,9 @@ export async function GET(req: NextRequest) {
     if (!email) {
       // If unauthenticated and invite code is queried without user email, return only public subset
       if (inviteCode) {
+        if (!sql) {
+          return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+        }
         const rows = await sql`
           SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
         `;
@@ -206,6 +193,10 @@ export async function GET(req: NextRequest) {
 
       // No session, no email, and no public param -> 401 Unauthorized
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
+    if (!sql) {
+      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
     }
 
     const weddingRow = await findWeddingForEmail(email);
@@ -351,16 +342,12 @@ export async function GET(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error in GET /api/wedding/sync:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "Terjadi kesalahan internal pada server" }, { status: 500 });
   }
 }
 
 export async function POST(req: NextRequest) {
   try {
-    if (!sql) {
-      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
-    }
-
     const clientIp = getClientIp(req);
 
     // Reject all payloads exceeding 2MB before reading the full stream
@@ -392,6 +379,10 @@ export async function POST(req: NextRequest) {
 
     // 1. Special Action: RSVP from Public Digital Invitation
     if (body.action === "RSVP") {
+      if (!sql) {
+        return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+      }
+
       if (!checkRateLimit(clientIp)) {
         return NextResponse.json(
           { success: false, message: "Terlalu banyak permintaan. Silakan tunggu beberapa saat." },
@@ -495,6 +486,10 @@ export async function POST(req: NextRequest) {
 
     // 2. Special Action: Claim Gift from Public Registry
     if (body.action === "CLAIM_GIFT") {
+      if (!sql) {
+        return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+      }
+
       if (!checkRateLimit(clientIp)) {
         return NextResponse.json(
           { success: false, message: "Terlalu banyak permintaan. Silakan tunggu beberapa saat." },
@@ -615,47 +610,17 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    let userEmail = sessionEmail || tokenEmail;
-
-    // Device secret credential check:
-    // If mobile/tab has no active cookie session or token yet,
-    // verify that body.user.email matches body.wedding.inviteCode or body.wedding.id in database
-    if (!userEmail) {
-      const candidateEmail = body?.user?.email?.toLowerCase().trim();
-      const candidateCode = body?.wedding?.inviteCode?.trim().toUpperCase();
-      const candidateWeddingId = body?.wedding?.id;
-
-      if (candidateEmail) {
-        if (candidateCode) {
-          const rows = await sql`
-            SELECT id FROM weddings
-            WHERE UPPER(invite_code) = ${candidateCode}
-              AND (LOWER(primary_user_email) = ${candidateEmail} OR LOWER(partner_user_email) = ${candidateEmail})
-            LIMIT 1
-          `;
-          if (rows && rows.length > 0) {
-            userEmail = candidateEmail;
-          }
-        }
-        if (!userEmail && candidateWeddingId && candidateWeddingId.length > 20 && candidateWeddingId !== "w-main") {
-          const rows = await sql`
-            SELECT id FROM weddings
-            WHERE id = ${candidateWeddingId}::uuid
-              AND (LOWER(primary_user_email) = ${candidateEmail} OR LOWER(partner_user_email) = ${candidateEmail})
-            LIMIT 1
-          `;
-          if (rows && rows.length > 0) {
-            userEmail = candidateEmail;
-          }
-        }
-      }
-    }
+    const userEmail = sessionEmail || tokenEmail;
 
     if (!userEmail) {
       return NextResponse.json(
-        { success: false, message: "Akses ditolak: Sesi login, kode pasangan valid, atau token workspace yang sah diperlukan untuk menyimpan perubahan." },
+        { success: false, message: "Akses ditolak: Sesi login atau token workspace bertanda-tangan sah diperlukan untuk menyimpan perubahan." },
         { status: 401 }
       );
+    }
+
+    if (!sql) {
+      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
     }
 
     const {
@@ -910,6 +875,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error in POST /api/wedding/sync:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "Terjadi kesalahan internal pada server" }, { status: 500 });
   }
 }

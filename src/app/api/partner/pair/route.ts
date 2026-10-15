@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
 import { findWeddingForEmail } from "@/db/find-wedding";
+import { verifyWorkspaceToken } from "@/lib/auth-token";
 
 // In-memory rate limiting against invite code brute-forcing (5 attempts per minute per IP)
 const pairRateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -30,10 +31,6 @@ function getClientIp(req: NextRequest): string {
 
 export async function POST(req: NextRequest) {
   try {
-    if (!sql) {
-      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
-    }
-
     const clientIp = getClientIp(req);
     if (!checkPairRateLimit(clientIp)) {
       return NextResponse.json(
@@ -42,17 +39,37 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    const session = await auth();
-    if (!session?.user?.email) {
+    let session = null;
+    try {
+      session = await auth();
+    } catch {}
+
+    const rawToken =
+      req.headers.get("x-hajat-token") ||
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+    let tokenEmail: string | undefined;
+    if (rawToken) {
+      const verified = verifyWorkspaceToken(rawToken);
+      if (verified.valid && verified.email) {
+        tokenEmail = verified.email;
+      }
+    }
+
+    const cleanUserEmail = session?.user?.email?.toLowerCase().trim() || tokenEmail;
+    if (!cleanUserEmail) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
-    const cleanUserEmail = session.user.email.toLowerCase().trim();
 
-    const body = await req.json();
+    const body = await req.json().catch(() => ({}));
     const { inviteCode, userName, userRole, userAvatarCardId } = body;
 
     if (!inviteCode || !inviteCode.trim()) {
       return NextResponse.json({ success: false, message: "Kode pasangan wajib diisi" }, { status: 400 });
+    }
+
+    if (!sql) {
+      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
     }
 
     const cleanCode = inviteCode.trim().toUpperCase();
@@ -264,6 +281,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error in POST /api/partner/pair:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "Terjadi kesalahan internal pada server" }, { status: 500 });
   }
 }

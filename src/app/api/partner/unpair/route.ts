@@ -3,25 +3,51 @@ import { sql } from "@/db";
 import { auth } from "@/auth";
 import { findWeddingForEmail } from "@/db/find-wedding";
 
+import { createWorkspaceToken, verifyWorkspaceToken } from "@/lib/auth-token";
+
 export async function POST(req: NextRequest) {
   try {
-    if (!sql) {
-      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+    let session = null;
+    try {
+      session = await auth();
+    } catch {}
+
+    const rawToken =
+      req.headers.get("x-hajat-token") ||
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+
+    let tokenEmail: string | undefined;
+    if (rawToken) {
+      const verified = verifyWorkspaceToken(rawToken);
+      if (verified.valid && verified.email) {
+        tokenEmail = verified.email;
+      }
     }
 
-    const session = await auth();
-    if (!session?.user?.email) {
+    const cleanUserEmail = session?.user?.email?.toLowerCase().trim() || tokenEmail;
+    if (!cleanUserEmail) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
-    const cleanUserEmail = session.user.email.toLowerCase().trim();
 
     const body = await req.json().catch(() => ({}));
     const { weddingId } = body;
 
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (weddingId) {
+      if (typeof weddingId !== "string" || !UUID_REGEX.test(weddingId.trim())) {
+        return NextResponse.json({ success: false, message: "Format weddingId tidak valid" }, { status: 400 });
+      }
+    }
+
+    if (!sql) {
+      return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
+    }
+
     let targetWedding = null;
 
     if (weddingId) {
-      const rows = await sql`SELECT * FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
+      const rows = await sql`SELECT * FROM weddings WHERE id = ${weddingId.trim()}::uuid LIMIT 1`;
       if (rows && rows.length > 0) targetWedding = rows[0];
     }
 
@@ -67,6 +93,6 @@ export async function POST(req: NextRequest) {
     });
   } catch (error: any) {
     console.error("Error in POST /api/partner/unpair:", error);
-    return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+    return NextResponse.json({ success: false, message: "Terjadi kesalahan internal pada server" }, { status: 500 });
   }
 }
