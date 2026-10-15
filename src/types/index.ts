@@ -71,6 +71,7 @@ export interface WeddingProject {
       avatarCardId?: string;
     };
   };
+  version?: number;
 }
 
 export interface SavingContribution {

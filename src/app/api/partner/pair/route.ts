@@ -192,6 +192,7 @@ export async function POST(req: NextRequest) {
         penghulu: finalWedding.penghulu || "",
         saksiNikah: finalWedding.saksi_nikah || "",
         isPartnerConnected: true,
+        version: typeof finalWedding.version === "number" ? finalWedding.version : 0,
         partnerInfo: {
           name: partnerDisplayName,
           role: partnerRoleDisplay,

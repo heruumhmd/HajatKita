@@ -323,6 +323,7 @@ export async function GET(req: NextRequest) {
       isPartnerConnected: isConnected,
       primaryUserEmail: user1Email,
       partnerUserEmail: user2Email,
+      version: typeof weddingRow.version === "number" ? weddingRow.version : 0,
       partnerInfo,
       couple: isConnected ? {
         user1: user1Info,
@@ -369,71 +370,85 @@ export async function POST(req: NextRequest) {
 
       const { slug, weddingId, guest } = parseResult.data;
 
-      let wRow = null;
-      if (weddingId && weddingId !== "w-main") {
-        const rows = await sql`SELECT * FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
-        if (rows && rows.length > 0) wRow = rows[0];
-      }
-      if (!wRow && slug) {
-        const rows = await sql`SELECT * FROM weddings WHERE LOWER(slug) = ${slug.toLowerCase().trim()} LIMIT 1`;
-        if (rows && rows.length > 0) wRow = rows[0];
+      const MAX_RETRIES = 3;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        let wRow = null;
+        if (weddingId && weddingId !== "w-main") {
+          const rows = await sql`SELECT id, plan_data, version FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
+          if (rows && rows.length > 0) wRow = rows[0];
+        }
+        if (!wRow && slug) {
+          const rows = await sql`SELECT id, plan_data, version FROM weddings WHERE LOWER(slug) = ${slug.toLowerCase().trim()} LIMIT 1`;
+          if (rows && rows.length > 0) wRow = rows[0];
+        }
+
+        if (!wRow) {
+          return NextResponse.json({ success: false, message: "Pernikahan tidak ditemukan" }, { status: 404 });
+        }
+
+        const currentVersion = typeof wRow.version === "number" ? wRow.version : 0;
+
+        let planData: any = {};
+        if (wRow.plan_data) {
+          try {
+            planData = JSON.parse(wRow.plan_data);
+          } catch (e) {}
+        }
+
+        const guests = Array.isArray(planData.guests) ? planData.guests : [];
+        const newGuest = {
+          id: `g-${crypto.randomUUID()}`,
+          name: guest.name.trim(),
+          phone: guest.phone || "-",
+          side: guest.side || "BOTH",
+          category: "Undangan Digital",
+          pax: guest.pax !== undefined ? guest.pax : 2,
+          rsvpStatus: guest.rsvpStatus || "CONFIRMED_ATTENDING",
+          notes: guest.notes || "",
+          envelopeAmount: 0,
+          giftDescription: "",
+        };
+
+        const existingIdx = guests.findIndex(
+          (g: any) => ((g && g.name) || "").toLowerCase().trim() === guest.name.toLowerCase().trim()
+        );
+        if (existingIdx >= 0) {
+          guests[existingIdx] = { ...guests[existingIdx], ...newGuest, id: guests[existingIdx].id };
+        } else {
+          guests.unshift(newGuest);
+        }
+
+        const activityLogs = Array.isArray(planData.activityLogs) ? planData.activityLogs : [];
+        activityLogs.unshift({
+          id: `act-${crypto.randomUUID()}`,
+          userName: guest.name,
+          userRole: "COLLABORATOR",
+          action: `Mengonfirmasi kehadiran via Undangan Digital (${guest.rsvpStatus === "CONFIRMED_ATTENDING" ? `Hadir ${guest.pax || 2} Pax` : "Tidak Hadir"})`,
+          timeAgo: "Baru saja",
+          timestamp: Date.now(),
+        });
+
+        planData.guests = guests;
+        planData.activityLogs = activityLogs.slice(0, 30);
+
+        const updateResult = await sql`
+          UPDATE weddings SET
+            plan_data = ${JSON.stringify(planData)},
+            version = version + 1,
+            updated_at = NOW()
+          WHERE id = ${wRow.id}::uuid AND version = ${currentVersion}
+          RETURNING id, version
+        `;
+
+        if (updateResult && updateResult.length > 0) {
+          return NextResponse.json({ success: true, message: "Konfirmasi kehadiran berhasil tersimpan ke database! 💌" });
+        }
       }
 
-      if (!wRow) {
-        return NextResponse.json({ success: false, message: "Pernikahan tidak ditemukan" }, { status: 404 });
-      }
-
-      let planData: any = {};
-      if (wRow.plan_data) {
-        try {
-          planData = JSON.parse(wRow.plan_data);
-        } catch (e) {}
-      }
-
-      const guests = Array.isArray(planData.guests) ? planData.guests : [];
-      const newGuest = {
-        id: `g-${Date.now()}`,
-        name: guest.name.trim(),
-        phone: guest.phone || "-",
-        side: guest.side || "BOTH",
-        category: "Undangan Digital",
-        pax: guest.pax !== undefined ? guest.pax : 2,
-        rsvpStatus: guest.rsvpStatus || "CONFIRMED_ATTENDING",
-        notes: guest.notes || "",
-        envelopeAmount: 0,
-        giftDescription: "",
-      };
-
-      const existingIdx = guests.findIndex(
-        (g: any) => ((g && g.name) || "").toLowerCase().trim() === guest.name.toLowerCase().trim()
+      return NextResponse.json(
+        { success: false, conflict: true, message: "Terjadi konflik pembaruan data RSVP. Silakan coba lagi." },
+        { status: 409 }
       );
-      if (existingIdx >= 0) {
-        guests[existingIdx] = { ...guests[existingIdx], ...newGuest, id: guests[existingIdx].id };
-      } else {
-        guests.unshift(newGuest);
-      }
-
-      const activityLogs = Array.isArray(planData.activityLogs) ? planData.activityLogs : [];
-      activityLogs.unshift({
-        id: `act-${Date.now()}`,
-        userName: guest.name,
-        userRole: "COLLABORATOR",
-        action: `Mengonfirmasi kehadiran via Undangan Digital (${guest.rsvpStatus === "CONFIRMED_ATTENDING" ? `Hadir ${guest.pax || 2} Pax` : "Tidak Hadir"})`,
-        timeAgo: "Baru saja",
-        timestamp: Date.now(),
-      });
-
-      planData.guests = guests;
-      planData.activityLogs = activityLogs.slice(0, 30);
-
-      await sql`
-        UPDATE weddings SET
-          plan_data = ${JSON.stringify(planData)},
-          updated_at = NOW()
-        WHERE id = ${wRow.id}::uuid
-      `;
-
-      return NextResponse.json({ success: true, message: "Konfirmasi kehadiran berhasil tersimpan ke database! 💌" });
     }
 
     // 2. Special Action: Claim Gift from Public Registry
@@ -453,58 +468,72 @@ export async function POST(req: NextRequest) {
 
       const { slug, weddingId, itemId, friendName } = parseResult.data;
 
-      let wRow = null;
-      if (weddingId && weddingId !== "w-main") {
-        const rows = await sql`SELECT * FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
-        if (rows && rows.length > 0) wRow = rows[0];
-      }
-      if (!wRow && slug) {
-        const rows = await sql`SELECT * FROM weddings WHERE LOWER(slug) = ${slug.toLowerCase().trim()} LIMIT 1`;
-        if (rows && rows.length > 0) wRow = rows[0];
-      }
-
-      if (!wRow) {
-        return NextResponse.json({ success: false, message: "Pernikahan tidak ditemukan" }, { status: 404 });
-      }
-
-      let planData: any = {};
-      if (wRow.plan_data) {
-        try {
-          planData = JSON.parse(wRow.plan_data);
-        } catch (e) {}
-      }
-
-      const postWedding = Array.isArray(planData.postWedding) ? planData.postWedding : [];
-      let claimedItemName = "Kado";
-      const updatedPostWedding = postWedding.map((item: any) => {
-        if (item.id === itemId) {
-          claimedItemName = item.name;
-          return { ...item, isAcquired: true, claimedBy: friendName.trim() };
+      const MAX_RETRIES = 3;
+      for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+        let wRow = null;
+        if (weddingId && weddingId !== "w-main") {
+          const rows = await sql`SELECT id, plan_data, version FROM weddings WHERE id = ${weddingId}::uuid LIMIT 1`;
+          if (rows && rows.length > 0) wRow = rows[0];
         }
-        return item;
-      });
+        if (!wRow && slug) {
+          const rows = await sql`SELECT id, plan_data, version FROM weddings WHERE LOWER(slug) = ${slug.toLowerCase().trim()} LIMIT 1`;
+          if (rows && rows.length > 0) wRow = rows[0];
+        }
 
-      const activityLogs = Array.isArray(planData.activityLogs) ? planData.activityLogs : [];
-      activityLogs.unshift({
-        id: `act-${Date.now()}`,
-        userName: friendName.trim(),
-        userRole: "COLLABORATOR",
-        action: `Mengklaim kado pernikahan: "${claimedItemName}" dari wishlist`,
-        timeAgo: "Baru saja",
-        timestamp: Date.now(),
-      });
+        if (!wRow) {
+          return NextResponse.json({ success: false, message: "Pernikahan tidak ditemukan" }, { status: 404 });
+        }
 
-      planData.postWedding = updatedPostWedding;
-      planData.activityLogs = activityLogs.slice(0, 30);
+        const currentVersion = typeof wRow.version === "number" ? wRow.version : 0;
 
-      await sql`
-        UPDATE weddings SET
-          plan_data = ${JSON.stringify(planData)},
-          updated_at = NOW()
-        WHERE id = ${wRow.id}::uuid
-      `;
+        let planData: any = {};
+        if (wRow.plan_data) {
+          try {
+            planData = JSON.parse(wRow.plan_data);
+          } catch (e) {}
+        }
 
-      return NextResponse.json({ success: true, message: "Klaim kado berhasil disimpan ke database! 🎁" });
+        const postWedding = Array.isArray(planData.postWedding) ? planData.postWedding : [];
+        let claimedItemName = "Kado";
+        const updatedPostWedding = postWedding.map((item: any) => {
+          if (item.id === itemId) {
+            claimedItemName = item.name;
+            return { ...item, isAcquired: true, claimedBy: friendName.trim() };
+          }
+          return item;
+        });
+
+        const activityLogs = Array.isArray(planData.activityLogs) ? planData.activityLogs : [];
+        activityLogs.unshift({
+          id: `act-${crypto.randomUUID()}`,
+          userName: friendName.trim(),
+          userRole: "COLLABORATOR",
+          action: `Mengklaim kado pernikahan: "${claimedItemName}" dari wishlist`,
+          timeAgo: "Baru saja",
+          timestamp: Date.now(),
+        });
+
+        planData.postWedding = updatedPostWedding;
+        planData.activityLogs = activityLogs.slice(0, 30);
+
+        const updateResult = await sql`
+          UPDATE weddings SET
+            plan_data = ${JSON.stringify(planData)},
+            version = version + 1,
+            updated_at = NOW()
+          WHERE id = ${wRow.id}::uuid AND version = ${currentVersion}
+          RETURNING id, version
+        `;
+
+        if (updateResult && updateResult.length > 0) {
+          return NextResponse.json({ success: true, message: "Klaim kado berhasil disimpan ke database! 🎁" });
+        }
+      }
+
+      return NextResponse.json(
+        { success: false, conflict: true, message: "Terjadi konflik pembaruan klaim kado. Silakan coba lagi." },
+        { status: 409 }
+      );
     }
 
     // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session
@@ -645,6 +674,7 @@ export async function POST(req: NextRequest) {
     }
 
     let savedWeddingId: string;
+    let savedWeddingVersion: number = 0;
 
     if (existingWedding) {
       savedWeddingId = existingWedding.id;
@@ -701,12 +731,14 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      await sql`
+      const clientBaseVersion = typeof body.baseVersion === "number" ? body.baseVersion : (typeof wedding?.version === "number" ? wedding.version : 0);
+
+      const updateResult = await sql`
         UPDATE weddings SET
           title = ${wedding?.title || existingWedding.title || "Pernikahan Kita"},
           groom_name = COALESCE(NULLIF(${wedding?.groomName || ""}, ''), groom_name),
           bride_name = COALESCE(NULLIF(${wedding?.brideName || ""}, ''), bride_name),
-          wedding_date = COALESCE(${validWeddingDate}::date, wedding_date),
+          wedding_date = COALESCE(${validWeddingDate}, wedding_date),
           city = COALESCE(NULLIF(${wedding?.city || ""}, ''), city),
           target_budget = ${wedding?.targetBudget !== undefined ? wedding.targetBudget : existingWedding.target_budget},
           current_savings = ${wedding?.currentSavings !== undefined ? wedding.currentSavings : existingWedding.current_savings},
@@ -725,9 +757,27 @@ export async function POST(req: NextRequest) {
           partner_avatar_card_id = ${resolvedPartnerAvatar},
           primary_user_email = COALESCE(${primaryEmail}, primary_user_email),
           plan_data = ${planDataJson},
+          version = version + 1,
           updated_at = NOW()
-        WHERE id = ${savedWeddingId}::uuid
+        WHERE id = ${savedWeddingId}::uuid AND version = ${clientBaseVersion}
+        RETURNING id, version
       `;
+
+      if (!updateResult || updateResult.length === 0) {
+        const vRows = await sql`SELECT version FROM weddings WHERE id = ${savedWeddingId}::uuid LIMIT 1`;
+        const currentVersion = vRows && vRows.length > 0 ? Number(vRows[0].version || 0) : 0;
+        return NextResponse.json(
+          {
+            success: false,
+            conflict: true,
+            version: currentVersion,
+            message: "Konflik versi: data telah diperbarui dari perangkat lain.",
+          },
+          { status: 409 }
+        );
+      }
+
+      savedWeddingVersion = Number(updateResult[0].version || 0);
     } else {
       let validWeddingDate: string | null = null;
       if (wedding?.weddingDate) {
@@ -744,13 +794,13 @@ export async function POST(req: NextRequest) {
           target_budget, current_savings, slug, venue_name, venue_address,
           mahar_details, wali_nikah, penghulu, saksi_nikah,
           is_partner_connected, partner_name, partner_email, partner_user_email, partner_role,
-          partner_avatar_card_id, primary_user_email, plan_data, updated_at
+          partner_avatar_card_id, primary_user_email, plan_data, version, updated_at
         ) VALUES (
           ${wedding?.title || "Pernikahan Kita"},
           ${inviteCode},
           ${wedding?.groomName || ""},
           ${wedding?.brideName || ""},
-          ${validWeddingDate}::date,
+          ${validWeddingDate},
           ${wedding?.city || ""},
           ${wedding?.targetBudget || 0},
           ${wedding?.currentSavings || 0},
@@ -769,17 +819,20 @@ export async function POST(req: NextRequest) {
           ${wedding?.partnerInfo?.avatarCardId || null},
           ${userEmail || null},
           ${planDataJson},
+          0,
           NOW()
         )
-        RETURNING id
+        RETURNING id, version
       `;
       savedWeddingId = insertRows[0].id;
+      savedWeddingVersion = Number(insertRows[0].version || 0);
     }
 
     return NextResponse.json({
       success: true,
       weddingId: savedWeddingId,
       inviteCode,
+      version: savedWeddingVersion,
     });
   } catch (error: any) {
     console.error("Error in POST /api/wedding/sync:", error);

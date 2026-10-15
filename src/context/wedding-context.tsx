@@ -20,6 +20,7 @@ import {
   User,
 } from "@/types";
 import { getDefaultCuteCardForRole } from "@/lib/cute-cards";
+import { showToastWarning } from "@/lib/swal";
 
 const STORAGE_KEY = "HAJAT_KITA_STORE_V2";
 const AUTH_STORAGE_KEY = "HAJAT_AUTH_USER_V2";
@@ -51,6 +52,7 @@ export const cleanEmptyWedding: WeddingProject = {
   penghulu: "",
   saksiNikah: "",
   isPartnerConnected: false,
+  version: 0,
 };
 
 export const defaultFamilyQuota: FamilyQuota = {
@@ -294,10 +296,19 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const pendingSaveRef = useRef(false);
   const pendingAuthCallbackRef = useRef<(() => void) | null>(null);
   const currentUserRef = useRef<User | null>(currentUser);
+  const weddingRef = useRef<WeddingProject>(wedding);
+  const versionRef = useRef<number>(0);
+  const lastServerHashRef = useRef<string>("");
+  const hasLoadedRemoteRef = useRef<boolean>(false);
+  const requestSeqRef = useRef<number>(0);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
   }, [currentUser]);
+
+  useEffect(() => {
+    weddingRef.current = wedding;
+  }, [wedding]);
 
   // Sync NextAuth session with currentUser
   useEffect(() => {
@@ -310,7 +321,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         const nickname = name.split(" ")[0];
         const defaultCard = prev?.avatarCardId || getDefaultCuteCardForRole(prev?.role).id;
         return {
-          id: (sessionUser as any).id || `u-${Date.now()}`,
+          id: (sessionUser as any).id || `u-${crypto.randomUUID()}`,
           name,
           nickname,
           email,
@@ -325,10 +336,50 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
   }, [session]);
 
+  // Helper to extract and build planning payload consistently
+  const buildPlanPayload = useCallback(() => ({
+    wedding,
+    savingContributions,
+    checklist,
+    seserahan,
+    postWedding,
+    guests,
+    familyQuota,
+    rundown,
+    budgetCategories,
+    vendors,
+    alignmentTopics,
+    adminSteps,
+    activityLogs,
+  }), [
+    wedding,
+    savingContributions,
+    checklist,
+    seserahan,
+    postWedding,
+    guests,
+    familyQuota,
+    rundown,
+    budgetCategories,
+    vendors,
+    alignmentTopics,
+    adminSteps,
+    activityLogs,
+  ]);
+
   // Load from Database whenever user logs in or polls
-  const fetchDbData = useCallback(async (email?: string, code?: string) => {
-    // Skip polling while a save is in progress to prevent overwriting fresh data
-    if (pendingSaveRef.current) return;
+  const fetchDbData = useCallback(async (email?: string, code?: string, force = false) => {
+    if (!force) {
+      // Skip polling while a save is in progress or waiting
+      if (pendingSaveRef.current || saveTimeoutRef.current !== null) return;
+      // Skip polling if there are unsaved local modifications
+      const currentPayload = buildPlanPayload();
+      const currentHash = JSON.stringify(currentPayload);
+      if (lastServerHashRef.current !== "" && currentHash !== lastServerHashRef.current) {
+        return;
+      }
+    }
+
     try {
       const activeUser = currentUserRef.current;
       const activeEmail = (email || activeUser?.email || "").toLowerCase().trim();
@@ -339,13 +390,23 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         : "";
       if (!query) return;
 
+      const currentSeq = ++requestSeqRef.current;
       const res = await fetch(`/api/wedding/sync?${query}`);
       const data = await res.json();
 
+      // Drop stale response if a newer request was dispatched while this was in flight
+      if (currentSeq !== requestSeqRef.current) return;
+
+      hasLoadedRemoteRef.current = true;
+
       if (data.success && data.exists) {
+        if (typeof data.wedding?.version === "number") {
+          versionRef.current = data.wedding.version;
+        }
+
         if (data.user) {
           setCurrentUser((prev) => ({
-            id: data.user.id || prev?.id || `u-${Date.now()}`,
+            id: data.user.id || prev?.id || `u-${crypto.randomUUID()}`,
             name: data.user.name || prev?.name || "Calon Pengantin",
             nickname: data.user.nickname || prev?.nickname || "Saya",
             email: data.user.email || prev?.email || "",
@@ -358,93 +419,126 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           }));
         }
 
+        let updatedWedding = weddingRef.current;
         if (data.wedding) {
-          setWedding((prev) => {
-            const userNow = currentUserRef.current;
-            let partnerInfo = data.wedding.partnerInfo;
+          const userNow = currentUserRef.current;
+          let partnerInfo = data.wedding.partnerInfo;
 
-            // Reciprocal partner resolution using couple data
-            if (data.wedding.couple && userNow?.email) {
-              const myEmail = userNow.email.toLowerCase().trim();
-              const u1 = data.wedding.couple.user1;
-              const u2 = data.wedding.couple.user2;
-              if (u1 && u1.email && u1.email.toLowerCase().trim() === myEmail) {
-                partnerInfo = u2;
-              } else if (u2 && u2.email && u2.email.toLowerCase().trim() === myEmail) {
-                partnerInfo = u1;
+          // Reciprocal partner resolution using couple data
+          if (data.wedding.couple && userNow?.email) {
+            const myEmail = userNow.email.toLowerCase().trim();
+            const u1 = data.wedding.couple.user1;
+            const u2 = data.wedding.couple.user2;
+            if (u1 && u1.email && u1.email.toLowerCase().trim() === myEmail) {
+              partnerInfo = u2;
+            } else if (u2 && u2.email && u2.email.toLowerCase().trim() === myEmail) {
+              partnerInfo = u1;
+            }
+          }
+
+          // Infallible Safeguard: A user can NEVER be their own partner!
+          if (partnerInfo && userNow) {
+            const myEmail = (userNow.email || "").toLowerCase().trim();
+            const myName = (userNow.name || "").toLowerCase().trim();
+            const pEmail = (partnerInfo.email || "").toLowerCase().trim();
+            const pName = (partnerInfo.name || "").toLowerCase().trim();
+
+            const isSelf =
+              (myEmail && pEmail && myEmail === pEmail) ||
+              (myName && pName && myName === pName) ||
+              (userNow.role && partnerInfo.role && userNow.role === partnerInfo.role);
+
+            if (isSelf) {
+              if (userNow.role === "GROOM") {
+                partnerInfo = {
+                  name: data.wedding.brideName || weddingRef.current.brideName || "Calon Istri",
+                  role: "BRIDE",
+                  email: data.wedding.primaryUserEmail || "",
+                  avatarCardId: "duck-bride",
+                };
+              } else {
+                partnerInfo = {
+                  name: data.wedding.groomName || weddingRef.current.groomName || "Calon Suami",
+                  role: "GROOM",
+                  email: data.wedding.partnerUserEmail || "",
+                  avatarCardId: "penguin-groom",
+                };
               }
             }
+          }
 
-            // Infallible Safeguard: A user can NEVER be their own partner!
-            if (partnerInfo && userNow) {
-              const myEmail = (userNow.email || "").toLowerCase().trim();
-              const myName = (userNow.name || "").toLowerCase().trim();
-              const pEmail = (partnerInfo.email || "").toLowerCase().trim();
-              const pName = (partnerInfo.name || "").toLowerCase().trim();
+          // Bug 10 fix: announce partner connection OUTSIDE the updater to prevent duplicate logs in StrictMode
+          const prevConnected = weddingRef.current.isPartnerConnected;
+          const newConnected = Boolean(data.wedding.isPartnerConnected);
+          if (!prevConnected && newConnected) {
+            addActivity(
+              partnerInfo?.name || "Pasangan",
+              partnerInfo?.role || "BRIDE",
+              "Berhasil terhubung ke Duo Workspace! Rencana kini tersinkron."
+            );
+          }
 
-              const isSelf =
-                (myEmail && pEmail && myEmail === pEmail) ||
-                (myName && pName && myName === pName) ||
-                (userNow.role && partnerInfo.role && userNow.role === partnerInfo.role);
-
-              if (isSelf) {
-                if (userNow.role === "GROOM") {
-                  partnerInfo = {
-                    name: data.wedding.brideName || prev.brideName || "Calon Istri",
-                    role: "BRIDE",
-                    email: data.wedding.primaryUserEmail || "",
-                    avatarCardId: "duck-bride",
-                  };
-                } else {
-                  partnerInfo = {
-                    name: data.wedding.groomName || prev.groomName || "Calon Suami",
-                    role: "GROOM",
-                    email: data.wedding.partnerUserEmail || "",
-                    avatarCardId: "penguin-groom",
-                  };
-                }
-              }
-            }
-
-            // If partner newly connected in the database, announce activity
-            if (!prev.isPartnerConnected && data.wedding.isPartnerConnected) {
-              addActivity(
-                partnerInfo?.name || "Pasangan",
-                partnerInfo?.role || "BRIDE",
-                "Berhasil terhubung ke Duo Workspace! Rencana kini tersinkron."
-              );
-            }
-
-            return {
-              ...prev,
-              ...data.wedding,
-              partnerInfo: partnerInfo || prev.partnerInfo,
-              // Keep existing ID if valid UUID
-              id: data.wedding.id || prev.id,
-            };
-          });
+          updatedWedding = {
+            ...weddingRef.current,
+            ...data.wedding,
+            partnerInfo: partnerInfo || weddingRef.current.partnerInfo,
+            id: data.wedding.id || weddingRef.current.id,
+            version: typeof data.wedding.version === "number" ? data.wedding.version : versionRef.current,
+          };
+          setWedding(updatedWedding);
         }
 
-        if (data.planData) {
-          const p = data.planData;
-          if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
-          if (Array.isArray(p.checklist)) setChecklist(p.checklist);
-          if (Array.isArray(p.seserahan)) setSeserahan(p.seserahan);
-          if (Array.isArray(p.postWedding)) setPostWedding(p.postWedding);
-          if (Array.isArray(p.guests)) setGuests(p.guests);
-          if (p.familyQuota) setFamilyQuota(p.familyQuota);
-          if (Array.isArray(p.rundown)) setRundown(p.rundown);
-          if (Array.isArray(p.budgetCategories)) setBudgetCategories(p.budgetCategories);
-          if (Array.isArray(p.vendors)) setVendors(p.vendors);
-          if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
-          if (Array.isArray(p.adminSteps) && p.adminSteps.length > 0) setAdminSteps(p.adminSteps);
-          if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
-        }
+        // Bug D: Apply ALL fields consistently from server, including defaults and empty arrays
+        const p = data.planData || {};
+        const incomingSavings = Array.isArray(p.savingContributions) ? p.savingContributions : [];
+        const incomingChecklist = Array.isArray(p.checklist) ? p.checklist : [];
+        const incomingSeserahan = Array.isArray(p.seserahan) ? p.seserahan : [];
+        const incomingPostWedding = Array.isArray(p.postWedding) ? p.postWedding : [];
+        const incomingGuests = Array.isArray(p.guests) ? p.guests : [];
+        const incomingFamilyQuota = p.familyQuota || defaultFamilyQuota;
+        const incomingRundown = Array.isArray(p.rundown) ? p.rundown : [];
+        const incomingBudgetCategories = Array.isArray(p.budgetCategories) ? p.budgetCategories : [];
+        const incomingVendors = Array.isArray(p.vendors) ? p.vendors : [];
+        const incomingAlignmentTopics = Array.isArray(p.alignmentTopics) ? p.alignmentTopics : [];
+        const incomingAdminSteps = Array.isArray(p.adminSteps) && p.adminSteps.length > 0 ? p.adminSteps : officialAdminSteps;
+        const incomingActivityLogs = Array.isArray(p.activityLogs) ? p.activityLogs : [];
+
+        setSavingContributions(incomingSavings);
+        setChecklist(incomingChecklist);
+        setSeserahan(incomingSeserahan);
+        setPostWedding(incomingPostWedding);
+        setGuests(incomingGuests);
+        setFamilyQuota(incomingFamilyQuota);
+        setRundown(incomingRundown);
+        setBudgetCategories(incomingBudgetCategories);
+        setVendors(incomingVendors);
+        setAlignmentTopics(incomingAlignmentTopics);
+        setAdminSteps(incomingAdminSteps);
+        setActivityLogs(incomingActivityLogs);
+
+        // Bug B: Record applied remote hash so Auto-Save doesn't echo back to server
+        lastServerHashRef.current = JSON.stringify({
+          wedding: updatedWedding,
+          savingContributions: incomingSavings,
+          checklist: incomingChecklist,
+          seserahan: incomingSeserahan,
+          postWedding: incomingPostWedding,
+          guests: incomingGuests,
+          familyQuota: incomingFamilyQuota,
+          rundown: incomingRundown,
+          budgetCategories: incomingBudgetCategories,
+          vendors: incomingVendors,
+          alignmentTopics: incomingAlignmentTopics,
+          adminSteps: incomingAdminSteps,
+          activityLogs: incomingActivityLogs,
+        });
+      } else if (data.success && !data.exists) {
+        hasLoadedRemoteRef.current = true;
       }
     } catch (e) {
       console.warn("Failed to fetch wedding data from database", e);
     }
-  }, []);
+  }, [buildPlanPayload]);
 
   // Fetch when currentUser changes
   useEffect(() => {
@@ -567,10 +661,24 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     activityLogs,
   ]);
 
-  // 3. Auto-Save to Neon Database (Debounced 1.2s across Local & Deploy)
+  // 3. Auto-Save to Neon Database (Debounced 500ms across Local & Deploy)
   useEffect(() => {
     if (!isInitialized) return;
     if (!currentUser?.email && wedding.id === "w-main" && !wedding.groomName && !wedding.brideName) {
+      return;
+    }
+
+    // Bug E: Mencegah data lama menimpa: Auto-save TIDAK boleh berjalan untuk user
+    // yang sudah login sebelum fetch pertama (fetchDbData) selesai
+    if (currentUser?.email && !hasLoadedRemoteRef.current) {
+      return;
+    }
+
+    const currentPayload = buildPlanPayload();
+    const currentHash = JSON.stringify(currentPayload);
+
+    // Bug B: Mencegah echo: jika hash saat ini sama dengan lastServerHashRef, JANGAN menyimpan
+    if (lastServerHashRef.current !== "" && currentHash === lastServerHashRef.current) {
       return;
     }
 
@@ -585,38 +693,51 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            wedding,
-            savingContributions,
-            checklist,
-            seserahan,
-            postWedding,
-            guests,
-            familyQuota,
-            rundown,
-            budgetCategories,
-            vendors,
-            alignmentTopics,
-            adminSteps,
-            activityLogs,
+            ...currentPayload,
+            baseVersion: versionRef.current,
             user: currentUser,
           }),
         });
         const resData = await res.json();
-        if (resData.success && resData.weddingId) {
-          setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId } : prev));
-        } else if (!resData.success) {
+
+        // 409 Conflict Handling
+        if (res.status === 409 || resData.conflict) {
+          if (typeof resData.version === "number") {
+            versionRef.current = resData.version;
+          }
+          showToastWarning(
+            "Data Diperbarui",
+            "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
+          );
+          await fetchDbData(currentUser?.email, wedding.inviteCode, true);
+          return;
+        }
+
+        if (resData.success) {
+          if (typeof resData.version === "number") {
+            versionRef.current = resData.version;
+          }
+          if (resData.weddingId) {
+            setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
+          }
+          lastServerHashRef.current = currentHash;
+        } else {
           console.warn("Auto-save returned error from server:", resData.error || resData.message);
         }
       } catch (e) {
         console.warn("Auto-save to database deferred", e);
       } finally {
+        saveTimeoutRef.current = null;
         // Allow polling to resume after save completes
         setTimeout(() => { pendingSaveRef.current = false; }, 800);
       }
-    }, 300);
+    }, 500);
 
     return () => {
-      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      if (saveTimeoutRef.current) {
+        clearTimeout(saveTimeoutRef.current);
+        saveTimeoutRef.current = null;
+      }
     };
   }, [
     isInitialized,
@@ -634,34 +755,46 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    buildPlanPayload,
+    fetchDbData,
   ]);
 
   // Explicit sync triggered on actions like copying invite code or link
   const syncNow = async (): Promise<boolean> => {
     try {
+      const payload = buildPlanPayload();
       const res = await fetch("/api/wedding/sync", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          wedding,
-          savingContributions,
-          checklist,
-          seserahan,
-          postWedding,
-          guests,
-          familyQuota,
-          rundown,
-          budgetCategories,
-          vendors,
-          alignmentTopics,
-          adminSteps,
-          activityLogs,
+          ...payload,
+          baseVersion: versionRef.current,
           user: currentUser,
         }),
       });
       const resData = await res.json();
-      if (resData.success && resData.weddingId) {
-        setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId } : prev));
+
+      // 409 Conflict Handling
+      if (res.status === 409 || resData.conflict) {
+        if (typeof resData.version === "number") {
+          versionRef.current = resData.version;
+        }
+        showToastWarning(
+          "Data Diperbarui",
+          "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
+        );
+        await fetchDbData(currentUser?.email, wedding.inviteCode, true);
+        return false;
+      }
+
+      if (resData.success) {
+        if (typeof resData.version === "number") {
+          versionRef.current = resData.version;
+        }
+        if (resData.weddingId) {
+          setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
+        }
+        lastServerHashRef.current = JSON.stringify(payload);
         return true;
       }
       return false;
@@ -775,22 +908,54 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       }
 
       if (result.wedding) {
+        if (typeof result.wedding.version === "number") {
+          versionRef.current = result.wedding.version;
+        }
         setWedding(result.wedding);
       }
       if (result.planData) {
         const p = result.planData;
-        if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
-        if (Array.isArray(p.checklist)) setChecklist(p.checklist);
-        if (Array.isArray(p.seserahan)) setSeserahan(p.seserahan);
-        if (Array.isArray(p.postWedding)) setPostWedding(p.postWedding);
-        if (Array.isArray(p.guests)) setGuests(p.guests);
-        if (p.familyQuota) setFamilyQuota(p.familyQuota);
-        if (Array.isArray(p.rundown)) setRundown(p.rundown);
-        if (Array.isArray(p.budgetCategories)) setBudgetCategories(p.budgetCategories);
-        if (Array.isArray(p.vendors)) setVendors(p.vendors);
-        if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
-        if (Array.isArray(p.adminSteps)) setAdminSteps(p.adminSteps);
-        if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
+        const incomingSavings = Array.isArray(p.savingContributions) ? p.savingContributions : [];
+        const incomingChecklist = Array.isArray(p.checklist) ? p.checklist : [];
+        const incomingSeserahan = Array.isArray(p.seserahan) ? p.seserahan : [];
+        const incomingPostWedding = Array.isArray(p.postWedding) ? p.postWedding : [];
+        const incomingGuests = Array.isArray(p.guests) ? p.guests : [];
+        const incomingFamilyQuota = p.familyQuota || defaultFamilyQuota;
+        const incomingRundown = Array.isArray(p.rundown) ? p.rundown : [];
+        const incomingBudgetCategories = Array.isArray(p.budgetCategories) ? p.budgetCategories : [];
+        const incomingVendors = Array.isArray(p.vendors) ? p.vendors : [];
+        const incomingAlignmentTopics = Array.isArray(p.alignmentTopics) ? p.alignmentTopics : [];
+        const incomingAdminSteps = Array.isArray(p.adminSteps) && p.adminSteps.length > 0 ? p.adminSteps : officialAdminSteps;
+        const incomingActivityLogs = Array.isArray(p.activityLogs) ? p.activityLogs : [];
+
+        setSavingContributions(incomingSavings);
+        setChecklist(incomingChecklist);
+        setSeserahan(incomingSeserahan);
+        setPostWedding(incomingPostWedding);
+        setGuests(incomingGuests);
+        setFamilyQuota(incomingFamilyQuota);
+        setRundown(incomingRundown);
+        setBudgetCategories(incomingBudgetCategories);
+        setVendors(incomingVendors);
+        setAlignmentTopics(incomingAlignmentTopics);
+        setAdminSteps(incomingAdminSteps);
+        setActivityLogs(incomingActivityLogs);
+
+        lastServerHashRef.current = JSON.stringify({
+          wedding: result.wedding || weddingRef.current,
+          savingContributions: incomingSavings,
+          checklist: incomingChecklist,
+          seserahan: incomingSeserahan,
+          postWedding: incomingPostWedding,
+          guests: incomingGuests,
+          familyQuota: incomingFamilyQuota,
+          rundown: incomingRundown,
+          budgetCategories: incomingBudgetCategories,
+          vendors: incomingVendors,
+          alignmentTopics: incomingAlignmentTopics,
+          adminSteps: incomingAdminSteps,
+          activityLogs: incomingActivityLogs,
+        });
       }
 
       addActivity(

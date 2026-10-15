@@ -52,6 +52,7 @@ export const weddings = pgTable("weddings", {
   primaryUserEmail: varchar("primary_user_email", { length: 255 }),
   partnerUserEmail: varchar("partner_user_email", { length: 255 }),
   planData: text("plan_data"), // Complete serialized JSON state for all planning modules
+  version: integer("version").notNull().default(0),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });

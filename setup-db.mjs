@@ -63,6 +63,7 @@ async function setup() {
       primary_user_email VARCHAR(255),
       partner_user_email VARCHAR(255),
       plan_data TEXT,
+      version INTEGER NOT NULL DEFAULT 0,
       created_at TIMESTAMPTZ DEFAULT NOW(),
       updated_at TIMESTAMPTZ DEFAULT NOW()
     );
@@ -89,6 +90,7 @@ async function setup() {
   await sql`ALTER TABLE weddings ADD COLUMN IF NOT EXISTS primary_user_email VARCHAR(255);`;
   await sql`ALTER TABLE weddings ADD COLUMN IF NOT EXISTS partner_user_email VARCHAR(255);`;
   await sql`ALTER TABLE weddings ADD COLUMN IF NOT EXISTS plan_data TEXT;`;
+  await sql`ALTER TABLE weddings ADD COLUMN IF NOT EXISTS version INTEGER NOT NULL DEFAULT 0;`;
 
   // 3. Couple History table
   await sql`
