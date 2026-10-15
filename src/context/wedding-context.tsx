@@ -534,6 +534,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Load from Database whenever user logs in or polls
   const fetchDbData = useCallback(async (email?: string, code?: string, force = false) => {
+    if (isLoggingOutRef.current) return;
+    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") {
+      return;
+    }
+
     if (!force) {
       // Skip polling while a save is in progress, in flight, or waiting
       if (pendingSaveRef.current || inFlightRef.current || saveTimeoutRef.current !== null) return;
@@ -760,6 +765,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
     const pollSync = () => {
       if (typeof document !== "undefined" && document.hidden) return;
+      if (isLoggingOutRef.current) return;
+      if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") return;
       if (currentUser?.email) {
         fetchDbData(currentUser.email);
       } else if (
@@ -790,6 +797,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // 1. Initial Load from LocalStorage
   useEffect(() => {
     try {
+      if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") {
+        setIsInitialized(true);
+        return;
+      }
+
       // Load user
       const storedUser = localStorage.getItem(AUTH_STORAGE_KEY);
       if (storedUser) {
@@ -842,7 +854,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // 2. Auto Save to LocalStorage whenever state changes
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isLoggingOutRef.current) return;
+    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") return;
     try {
       const payload = {
         wedding,
@@ -1233,7 +1246,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Save auth user to localStorage
   useEffect(() => {
-    if (!isInitialized) return;
+    if (!isInitialized || isLoggingOutRef.current) return;
+    if (typeof window !== "undefined" && sessionStorage.getItem("HAJAT_LOGOUT_FLAG") === "true") return;
     try {
       if (currentUser) {
         localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(currentUser));
@@ -1398,6 +1412,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setAlignmentTopics([]);
     setAdminSteps(officialAdminSteps);
     setActivityLogs([]);
+    setLifeGoals([]);
     deletedItemIdsRef.current.clear();
     setDeletedItemIds([]);
 
@@ -1418,18 +1433,29 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       document.cookie = "__Secure-authjs.session-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure";
       document.cookie = "__Host-authjs.csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; secure";
       document.cookie = "authjs.csrf-token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+      document.cookie = "hajat_workspace_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT";
     } catch {}
 
-    // 7. Invoke NextAuth signOut to destroy server session
+    // 7. Invoke dedicated server logout API to destroy all HttpOnly server session cookies
+    try {
+      await fetch("/api/auth/logout", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (e) {
+      console.warn("Server logout error", e);
+    }
+
+    // 8. Invoke NextAuth signOut to destroy client session
     try {
       await signOut({ callbackUrl: "/", redirect: false });
     } catch (e) {
       console.warn("SignOut error", e);
     }
 
-    // 8. Hard browser navigation to / to completely dump in-memory caches, router cache, and react context
+    // 9. Hard browser navigation to / to completely dump in-memory caches, router cache, and react context
     if (typeof window !== "undefined") {
-      window.location.href = "/";
+      window.location.replace("/");
     }
   };
 

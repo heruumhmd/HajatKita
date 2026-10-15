@@ -22,6 +22,7 @@ import {
   Menu,
   Activity,
   LogOut,
+  LogIn,
   TrendingUp,
 } from "lucide-react";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
@@ -66,7 +67,7 @@ export function AppSidebar({
   onOpenMobileMenu,
 }: AppSidebarProps) {
   const pathname = usePathname();
-  const { wedding, currentUser, logout } = useWedding();
+  const { wedding, currentUser, logout, setIsAuthModalOpen } = useWedding();
 
   const handleLogout = async () => {
     const isConfirmed = await showConfirmDialog({
@@ -255,7 +256,7 @@ export function AppSidebar({
               </div>
             </div>
 
-            {currentUser && (
+            {currentUser ? (
               <button
                 type="button"
                 onClick={handleLogout}
@@ -264,6 +265,16 @@ export function AppSidebar({
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span>Keluar Akun</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setIsAuthModalOpen(true)}
+                className="mt-2.5 w-full flex items-center justify-center gap-1.5 py-1.5 px-3 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white text-[11px] font-bold transition-all shadow-xs"
+                title="Masuk ke Akun Anda"
+              >
+                <LogIn className="w-3.5 h-3.5" />
+                <span>Masuk Akun</span>
               </button>
             )}
           </div>
