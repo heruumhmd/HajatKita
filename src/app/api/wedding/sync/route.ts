@@ -1,6 +1,56 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
+import { z } from "zod";
+
+// In-memory rate limiting per IP (10 requests per minute)
+// NOTE: For multi-instance / serverless deployment (e.g. Vercel),
+// an external store like Upstash Redis is recommended for distributed rate limiting.
+const rateLimitMap = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(ip: string, limit = 10, windowMs = 60 * 1000): boolean {
+  const now = Date.now();
+  const entry = rateLimitMap.get(ip);
+  if (!entry || now > entry.resetTime) {
+    rateLimitMap.set(ip, { count: 1, resetTime: now + windowMs });
+    return true;
+  }
+  if (entry.count >= limit) {
+    return false;
+  }
+  entry.count += 1;
+  return true;
+}
+
+function getClientIp(req: NextRequest): string {
+  const forwarded = req.headers.get("x-forwarded-for");
+  if (forwarded) {
+    return forwarded.split(",")[0].trim();
+  }
+  return req.headers.get("x-real-ip") || "unknown";
+}
+
+const rsvpSchema = z.object({
+  action: z.literal("RSVP"),
+  weddingId: z.string().optional(),
+  slug: z.string().optional(),
+  guest: z.object({
+    name: z.string().trim().min(1, "Nama tamu wajib diisi").max(100, "Nama maksimal 100 karakter"),
+    phone: z.string().max(30, "Nomor telepon maksimal 30 karakter").optional().default("-"),
+    notes: z.string().max(500, "Catatan maksimal 500 karakter").optional().default(""),
+    pax: z.number().int().min(0).max(20).optional().default(2),
+    side: z.enum(["GROOM", "BRIDE", "BOTH"]).optional().default("BOTH"),
+    rsvpStatus: z.enum(["CONFIRMED_ATTENDING", "DECLINED"]).optional().default("CONFIRMED_ATTENDING"),
+  }),
+});
+
+const claimGiftSchema = z.object({
+  action: z.literal("CLAIM_GIFT"),
+  weddingId: z.string().optional(),
+  slug: z.string().optional(),
+  itemId: z.string().min(1, "ID kado wajib diisi"),
+  friendName: z.string().trim().min(1, "Nama pemberi kado wajib diisi").max(100, "Nama maksimal 100 karakter"),
+});
 
 export async function GET(req: NextRequest) {
   try {
@@ -9,59 +59,145 @@ export async function GET(req: NextRequest) {
     }
 
     const { searchParams } = new URL(req.url);
-    let email = searchParams.get("email")?.toLowerCase().trim();
-
-    // If email not in query params, try NextAuth session
-    if (!email) {
-      const session = await auth();
-      email = session?.user?.email?.toLowerCase().trim();
-    }
-
     const inviteCode = searchParams.get("code")?.trim().toUpperCase();
     const slug = searchParams.get("slug")?.trim().toLowerCase();
 
-    let weddingRow = null;
-
+    // 1. Public Access: by slug (invitation & registry pages)
     if (slug) {
       const rows = await sql`
         SELECT * FROM weddings WHERE LOWER(slug) = ${slug} LIMIT 1
       `;
-      if (rows && rows.length > 0) {
-        weddingRow = rows[0];
+      if (!rows || rows.length === 0) {
+        return NextResponse.json({ success: true, exists: false, data: null });
       }
-    } else if (inviteCode) {
-      const rows = await sql`
-        SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
-      `;
-      if (rows && rows.length > 0) {
-        weddingRow = rows[0];
+      const weddingRow = rows[0];
+
+      let publicPostWedding: any[] = [];
+      if (weddingRow.plan_data) {
+        try {
+          const parsed = JSON.parse(weddingRow.plan_data);
+          if (Array.isArray(parsed.postWedding)) {
+            publicPostWedding = parsed.postWedding
+              .filter((item: any) => item.isGiftClaimable)
+              .map((item: any) => ({
+                id: item.id,
+                name: item.name,
+                category: item.category,
+                estimatedCost: item.estimatedCost,
+                isGiftClaimable: true,
+                isAcquired: Boolean(item.isAcquired),
+                claimedBy: item.claimedBy || null,
+                notes: item.notes || "",
+              }));
+          }
+        } catch (e) {
+          console.error("Failed to parse plan_data for public view", e);
+        }
       }
-    } else if (email) {
-      // Find wedding where user is primary or partner
-      const rows = await sql`
-        SELECT * FROM weddings 
-        WHERE LOWER(primary_user_email) = ${email} 
-           OR LOWER(partner_user_email) = ${email}
-           OR LOWER(partner_email) = ${email}
+
+      return NextResponse.json({
+        success: true,
+        exists: true,
+        wedding: {
+          id: weddingRow.id,
+          groomName: weddingRow.groom_name || "",
+          brideName: weddingRow.bride_name || "",
+          weddingDate: weddingRow.wedding_date || "",
+          city: weddingRow.city || "",
+          venueName: weddingRow.venue_name || "",
+          venueAddress: weddingRow.venue_address || "",
+          slug: weddingRow.slug || "",
+        },
+        planData: {
+          postWedding: publicPostWedding,
+        },
+      });
+    }
+
+    // 2. Authenticated Session Access for Full Workspace
+    const session = await auth();
+    const sessionEmail = session?.user?.email?.toLowerCase().trim();
+
+    if (!sessionEmail) {
+      // If unauthenticated and invite code is queried, return only public subset
+      if (inviteCode) {
+        const rows = await sql`
+          SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
+        `;
+        if (!rows || rows.length === 0) {
+          return NextResponse.json({ success: true, exists: false, data: null });
+        }
+        const weddingRow = rows[0];
+        let publicPostWedding: any[] = [];
+        if (weddingRow.plan_data) {
+          try {
+            const parsed = JSON.parse(weddingRow.plan_data);
+            if (Array.isArray(parsed.postWedding)) {
+              publicPostWedding = parsed.postWedding
+                .filter((item: any) => item.isGiftClaimable)
+                .map((item: any) => ({
+                  id: item.id,
+                  name: item.name,
+                  category: item.category,
+                  estimatedCost: item.estimatedCost,
+                  isGiftClaimable: true,
+                  isAcquired: Boolean(item.isAcquired),
+                  claimedBy: item.claimedBy || null,
+                  notes: item.notes || "",
+                }));
+            }
+          } catch (e) {}
+        }
+        return NextResponse.json({
+          success: true,
+          exists: true,
+          wedding: {
+            id: weddingRow.id,
+            groomName: weddingRow.groom_name || "",
+            brideName: weddingRow.bride_name || "",
+            weddingDate: weddingRow.wedding_date || "",
+            city: weddingRow.city || "",
+            venueName: weddingRow.venue_name || "",
+            venueAddress: weddingRow.venue_address || "",
+            slug: weddingRow.slug || "",
+          },
+          planData: {
+            postWedding: publicPostWedding,
+          },
+        });
+      }
+
+      // No session and no public param -> 401 Unauthorized
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+
+    const email = sessionEmail;
+    let weddingRow = null;
+
+    // Find wedding where user is primary or partner
+    const rows = await sql`
+      SELECT * FROM weddings 
+      WHERE LOWER(primary_user_email) = ${email} 
+         OR LOWER(partner_user_email) = ${email}
+         OR LOWER(partner_email) = ${email}
+      ORDER BY updated_at DESC LIMIT 1
+    `;
+    if (rows && rows.length > 0) {
+      weddingRow = rows[0];
+    } else {
+      // Fallback: Check couple_history for active connection
+      const historyRows = await sql`
+        SELECT * FROM couple_history
+        WHERE (LOWER(user1_email) = ${email} OR LOWER(user2_email) = ${email})
+          AND status = 'ACTIVE'
         ORDER BY updated_at DESC LIMIT 1
       `;
-      if (rows && rows.length > 0) {
-        weddingRow = rows[0];
-      } else {
-        // Fallback: Check couple_history for active connection
-        const historyRows = await sql`
-          SELECT * FROM couple_history
-          WHERE (LOWER(user1_email) = ${email} OR LOWER(user2_email) = ${email})
-            AND status = 'ACTIVE'
-          ORDER BY updated_at DESC LIMIT 1
+      if (historyRows && historyRows.length > 0) {
+        const wRows = await sql`
+          SELECT * FROM weddings WHERE id = ${historyRows[0].wedding_id}::uuid LIMIT 1
         `;
-        if (historyRows && historyRows.length > 0) {
-          const wRows = await sql`
-            SELECT * FROM weddings WHERE id = ${historyRows[0].wedding_id}::uuid LIMIT 1
-          `;
-          if (wRows && wRows.length > 0) {
-            weddingRow = wRows[0];
-          }
+        if (wRows && wRows.length > 0) {
+          weddingRow = wRows[0];
         }
       }
     }
@@ -213,14 +349,25 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
     }
 
+    const clientIp = getClientIp(req);
     const body = await req.json();
 
     // 1. Special Action: RSVP from Public Digital Invitation
     if (body.action === "RSVP") {
-      const { slug, weddingId, guest } = body;
-      if (!guest || !guest.name) {
-        return NextResponse.json({ success: false, message: "Nama tamu wajib diisi" }, { status: 400 });
+      if (!checkRateLimit(clientIp)) {
+        return NextResponse.json(
+          { success: false, message: "Terlalu banyak permintaan. Silakan tunggu beberapa saat." },
+          { status: 429 }
+        );
       }
+
+      const parseResult = rsvpSchema.safeParse(body);
+      if (!parseResult.success) {
+        const errMsg = parseResult.error.errors.map((e) => e.message).join(", ");
+        return NextResponse.json({ success: false, message: errMsg || "Data RSVP tidak valid" }, { status: 400 });
+      }
+
+      const { slug, weddingId, guest } = parseResult.data;
 
       let wRow = null;
       if (weddingId && weddingId !== "w-main") {
@@ -258,7 +405,7 @@ export async function POST(req: NextRequest) {
       };
 
       const existingIdx = guests.findIndex(
-        (g: any) => g.name.toLowerCase() === guest.name.toLowerCase().trim()
+        (g: any) => ((g && g.name) || "").toLowerCase().trim() === guest.name.toLowerCase().trim()
       );
       if (existingIdx >= 0) {
         guests[existingIdx] = { ...guests[existingIdx], ...newGuest, id: guests[existingIdx].id };
@@ -291,10 +438,20 @@ export async function POST(req: NextRequest) {
 
     // 2. Special Action: Claim Gift from Public Registry
     if (body.action === "CLAIM_GIFT") {
-      const { slug, weddingId, itemId, friendName } = body;
-      if (!itemId || !friendName) {
-        return NextResponse.json({ success: false, message: "Data klaim kado tidak lengkap" }, { status: 400 });
+      if (!checkRateLimit(clientIp)) {
+        return NextResponse.json(
+          { success: false, message: "Terlalu banyak permintaan. Silakan tunggu beberapa saat." },
+          { status: 429 }
+        );
       }
+
+      const parseResult = claimGiftSchema.safeParse(body);
+      if (!parseResult.success) {
+        const errMsg = parseResult.error.errors.map((e) => e.message).join(", ");
+        return NextResponse.json({ success: false, message: errMsg || "Data klaim kado tidak valid" }, { status: 400 });
+      }
+
+      const { slug, weddingId, itemId, friendName } = parseResult.data;
 
       let wRow = null;
       if (weddingId && weddingId !== "w-main") {
@@ -350,6 +507,13 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: "Klaim kado berhasil disimpan ke database! 🎁" });
     }
 
+    // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+    const userEmail = session.user.email.toLowerCase().trim();
+
     const {
       wedding,
       savingContributions,
@@ -367,17 +531,15 @@ export async function POST(req: NextRequest) {
       user,
     } = body;
 
-    const userEmail = (user?.email || wedding?.primaryUserEmail || "").toLowerCase().trim();
-
-    // 1. Upsert User if email is provided
+    // 1. Upsert User using authenticated session email
     if (userEmail) {
       await sql`
         INSERT INTO users (name, nickname, email, image, avatar_card_id, role, phone, bio, updated_at)
         VALUES (
-          ${user?.name || "Calon Pengantin"},
-          ${user?.nickname || user?.name?.split(" ")[0] || "Saya"},
+          ${user?.name || session.user.name || "Calon Pengantin"},
+          ${user?.nickname || user?.name?.split(" ")[0] || session.user.name?.split(" ")[0] || "Saya"},
           ${userEmail},
-          ${user?.image || null},
+          ${user?.image || session.user.image || null},
           ${user?.avatarCardId || "cat-prince"},
           ${user?.role || "GROOM"},
           ${user?.phone || null},
@@ -418,7 +580,26 @@ export async function POST(req: NextRequest) {
     let existingWedding = null;
     if (wedding?.id && wedding.id.length > 10 && wedding.id !== "w-main") {
       const rows = await sql`SELECT * FROM weddings WHERE id = ${wedding.id}::uuid LIMIT 1`;
-      if (rows && rows.length > 0) existingWedding = rows[0];
+      if (rows && rows.length > 0) {
+        const candidate = rows[0];
+        const isU1 = (candidate.primary_user_email || "").toLowerCase().trim() === userEmail;
+        const isU2 = (candidate.partner_user_email || candidate.partner_email || "").toLowerCase().trim() === userEmail;
+        const hist = await sql`
+          SELECT id FROM couple_history
+          WHERE wedding_id = ${candidate.id}::uuid
+            AND (LOWER(user1_email) = ${userEmail} OR LOWER(user2_email) = ${userEmail})
+            AND status = 'ACTIVE'
+          LIMIT 1
+        `;
+        const isHistoryMember = hist && hist.length > 0;
+        if (!isU1 && !isU2 && !isHistoryMember) {
+          return NextResponse.json(
+            { success: false, message: "Forbidden: Anda tidak memiliki hak akses untuk mengubah data pernikahan ini" },
+            { status: 403 }
+          );
+        }
+        existingWedding = candidate;
+      }
     }
 
     if (!existingWedding && userEmail) {
@@ -453,7 +634,14 @@ export async function POST(req: NextRequest) {
       const rows = await sql`
         SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
       `;
-      if (rows && rows.length > 0) existingWedding = rows[0];
+      if (rows && rows.length > 0) {
+        const candidate = rows[0];
+        const isU1 = (candidate.primary_user_email || "").toLowerCase().trim() === userEmail;
+        const isU2 = (candidate.partner_user_email || candidate.partner_email || "").toLowerCase().trim() === userEmail;
+        if (isU1 || isU2) {
+          existingWedding = candidate;
+        }
+      }
     }
 
     let savedWeddingId: string;
@@ -498,7 +686,7 @@ export async function POST(req: NextRequest) {
 
       if (isPartnerConnected) {
         resolvedPartnerRole = resolvedPartnerRole || (existingWedding.partner_role || (existingWedding.groom_name ? "GROOM" : "BRIDE"));
-        resolvedPartnerName = resolvedPartnerName || (resolvedPartnerRole === "GROOM" ? (existingWedding.groom_name || "Muhammad Heru") : (existingWedding.bride_name || "Nurul Fathonah"));
+        resolvedPartnerName = resolvedPartnerName || (resolvedPartnerRole === "GROOM" ? (existingWedding.groom_name || "Calon Suami") : (existingWedding.bride_name || "Calon Istri"));
         resolvedPartnerAvatar = resolvedPartnerAvatar || (resolvedPartnerRole === "GROOM" ? "penguin-groom" : "duck-bride");
       }
 

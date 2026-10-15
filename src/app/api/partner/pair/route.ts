@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
+import { auth } from "@/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,15 +8,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
     }
 
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
+    }
+    const cleanUserEmail = session.user.email.toLowerCase().trim();
+
     const body = await req.json();
-    const { inviteCode, userEmail, userName, userRole, userAvatarCardId } = body;
+    const { inviteCode, userName, userRole, userAvatarCardId } = body;
 
     if (!inviteCode || !inviteCode.trim()) {
       return NextResponse.json({ success: false, message: "Kode pasangan wajib diisi" }, { status: 400 });
     }
 
     const cleanCode = inviteCode.trim().toUpperCase();
-    const cleanUserEmail = (userEmail || "").toLowerCase().trim();
 
     // 1. Find wedding matching the invite code
     const targetWeddings = await sql`

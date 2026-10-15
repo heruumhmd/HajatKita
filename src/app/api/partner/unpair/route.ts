@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
+import { auth } from "@/auth";
 
 export async function POST(req: NextRequest) {
   try {
@@ -7,14 +8,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Database not configured" }, { status: 503 });
     }
 
-    const body = await req.json();
-    const { userEmail, weddingId } = body;
-
-    const cleanUserEmail = (userEmail || "").toLowerCase().trim();
-
-    if (!cleanUserEmail && !weddingId) {
-      return NextResponse.json({ success: false, message: "Email atau Wedding ID diperlukan" }, { status: 400 });
+    const session = await auth();
+    if (!session?.user?.email) {
+      return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
+    const cleanUserEmail = session.user.email.toLowerCase().trim();
+
+    const body = await req.json().catch(() => ({}));
+    const { weddingId } = body;
 
     let targetWedding = null;
 
@@ -23,12 +24,12 @@ export async function POST(req: NextRequest) {
       if (rows && rows.length > 0) targetWedding = rows[0];
     }
 
-    if (!targetWedding && cleanUserEmail) {
+    if (!targetWedding) {
       const rows = await sql`
         SELECT * FROM weddings 
-        WHERE (LOWER(primary_user_email) = ${cleanUserEmail} OR LOWER(partner_user_email) = ${cleanUserEmail})
+        WHERE (LOWER(primary_user_email) = ${cleanUserEmail} OR LOWER(partner_user_email) = ${cleanUserEmail} OR LOWER(partner_email) = ${cleanUserEmail})
           AND is_partner_connected = TRUE
-        LIMIT 1
+        ORDER BY updated_at DESC LIMIT 1
       `;
       if (rows && rows.length > 0) targetWedding = rows[0];
     }
@@ -38,7 +39,12 @@ export async function POST(req: NextRequest) {
     }
 
     const u1 = (targetWedding.primary_user_email || "").toLowerCase().trim();
-    const u2 = (targetWedding.partner_user_email || "").toLowerCase().trim();
+    const u2 = (targetWedding.partner_user_email || targetWedding.partner_email || "").toLowerCase().trim();
+
+    // Verify user belongs to this wedding
+    if (u1 !== cleanUserEmail && u2 !== cleanUserEmail) {
+      return NextResponse.json({ success: false, message: "Forbidden: You are not authorized to unpair this wedding" }, { status: 403 });
+    }
 
     // 1. Mark couple_history as UNPAIRED (preserving data in database!)
     if (u1 && u2) {
