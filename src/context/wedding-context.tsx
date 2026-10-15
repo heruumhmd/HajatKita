@@ -425,10 +425,11 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     try {
       const activeUser = currentUserRef.current;
       const activeEmail = (email || activeUser?.email || "").toLowerCase().trim();
+      const inviteCode = code || weddingRef.current.inviteCode || wedding.inviteCode;
       const query = activeEmail
-        ? `email=${encodeURIComponent(activeEmail)}${code ? `&code=${encodeURIComponent(code)}` : ""}`
-        : code
-        ? `code=${encodeURIComponent(code)}`
+        ? `email=${encodeURIComponent(activeEmail)}${inviteCode ? `&code=${encodeURIComponent(inviteCode)}` : ""}`
+        : inviteCode
+        ? `code=${encodeURIComponent(inviteCode)}`
         : "";
       if (!query) return;
 
@@ -588,9 +589,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // Fetch when currentUser changes
   useEffect(() => {
     if (currentUser?.email) {
-      fetchDbData(currentUser.email);
+      fetchDbData(currentUser.email, weddingRef.current.inviteCode || wedding.inviteCode, true);
     }
-  }, [currentUser?.email, fetchDbData]);
+  }, [currentUser?.email, wedding.inviteCode, fetchDbData]);
 
   // Periodic background synchronization (every 6 seconds when window active)
   useEffect(() => {

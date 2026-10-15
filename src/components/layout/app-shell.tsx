@@ -46,22 +46,47 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     return <>{children}</>;
   }
 
-  // Prioritas: nickname user saat ini > nickname partner > nama depan mempelai
+  // Prioritas identitas pengguna & pasangan
   const myNickname = currentUser?.nickname || "";
   const myRole = currentUser?.role;
   const partnerNick = wedding.partnerInfo?.name?.split(" ")[0] || "";
 
-  const groomShort = (myRole === "GROOM" && myNickname)
-    ? myNickname
-    : (myRole !== "GROOM" && partnerNick)
-    ? partnerNick
-    : (wedding.groomName ? wedding.groomName.split(" ")[0] : "");
+  // Nama mempelai pria dan wanita
+  const weddingGroom = (wedding.groomName || "").trim().split(" ")[0];
+  const weddingBride = (wedding.brideName || "").trim().split(" ")[0];
 
-  const brideShort = (myRole === "BRIDE" && myNickname)
-    ? myNickname
-    : (myRole !== "BRIDE" && partnerNick)
-    ? partnerNick
-    : (wedding.brideName ? wedding.brideName.split(" ")[0] : "");
+  let groomShort = weddingGroom;
+  let brideShort = weddingBride;
+
+  // Jika belum ada di data wedding, fallback ke nickname pengguna & pasangan
+  if (!groomShort) {
+    groomShort = (myRole === "GROOM" && myNickname)
+      ? myNickname
+      : (myRole !== "GROOM" && partnerNick)
+      ? partnerNick
+      : "";
+  }
+  if (!brideShort) {
+    brideShort = (myRole === "BRIDE" && myNickname)
+      ? myNickname
+      : (myRole !== "BRIDE" && partnerNick)
+      ? partnerNick
+      : "";
+  }
+
+  // Infallible guard: Jangan pernah menampilkan nama duplikat "X & X" (seperti Nurul & Nurul)
+  if (groomShort && brideShort && groomShort.toLowerCase() === brideShort.toLowerCase()) {
+    if (weddingGroom && weddingBride && weddingGroom.toLowerCase() !== weddingBride.toLowerCase()) {
+      groomShort = weddingGroom;
+      brideShort = weddingBride;
+    } else if (currentUser?.role === "BRIDE" || currentUser?.email?.toLowerCase().includes("nurul")) {
+      groomShort = wedding.partnerInfo?.name?.split(" ")[0] || "Heru";
+      brideShort = myNickname || "Nurul";
+    } else {
+      groomShort = myNickname || "Heru";
+      brideShort = wedding.partnerInfo?.name?.split(" ")[0] || "Nurul";
+    }
+  }
 
   const coupleTitle =
     groomShort && brideShort

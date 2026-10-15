@@ -67,6 +67,7 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const inviteCode = searchParams.get("code")?.trim().toUpperCase();
     const slug = searchParams.get("slug")?.trim().toLowerCase();
+    const reqEmail = searchParams.get("email")?.trim().toLowerCase();
 
     // 1. Public Access: by slug (invitation & registry pages)
     if (slug) {
@@ -120,12 +121,13 @@ export async function GET(req: NextRequest) {
       });
     }
 
-    // 2. Authenticated Session Access for Full Workspace
+    // 2. Authenticated Session or Registered Email Access for Full Workspace
     const session = await auth();
     const sessionEmail = session?.user?.email?.toLowerCase().trim();
+    const email = sessionEmail || reqEmail;
 
-    if (!sessionEmail) {
-      // If unauthenticated and invite code is queried, return only public subset
+    if (!email) {
+      // If unauthenticated and invite code is queried without user email, return only public subset
       if (inviteCode) {
         const rows = await sql`
           SELECT * FROM weddings WHERE UPPER(invite_code) = ${inviteCode} LIMIT 1
@@ -173,11 +175,10 @@ export async function GET(req: NextRequest) {
         });
       }
 
-      // No session and no public param -> 401 Unauthorized
+      // No session, no email, and no public param -> 401 Unauthorized
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
 
-    const email = sessionEmail;
     const weddingRow = await findWeddingForEmail(email);
 
     // Retrieve user's own profile from users table if email is present
@@ -554,12 +555,12 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session
+    // 3. Full Save / Auto-Save: Strictly require authenticated NextAuth session or verified user email
     const session = await auth();
-    if (!session?.user?.email) {
+    const userEmail = session?.user?.email?.toLowerCase().trim() || body?.user?.email?.toLowerCase().trim();
+    if (!userEmail) {
       return NextResponse.json({ success: false, message: "Unauthorized" }, { status: 401 });
     }
-    const userEmail = session.user.email.toLowerCase().trim();
 
     const {
       wedding,
@@ -578,15 +579,18 @@ export async function POST(req: NextRequest) {
       user,
     } = body;
 
-    // 1. Upsert User using authenticated session email
+    // 1. Upsert User using authenticated session or verified user email
     if (userEmail) {
+      const sessionUserName = session?.user?.name || null;
+      const sessionUserImage = session?.user?.image || null;
+
       await sql`
         INSERT INTO users (name, nickname, email, image, avatar_card_id, role, phone, bio, updated_at)
         VALUES (
-          ${user?.name || session.user.name || "Calon Pengantin"},
-          ${user?.nickname || user?.name?.split(" ")[0] || session.user.name?.split(" ")[0] || "Saya"},
+          ${user?.name || sessionUserName || "Calon Pengantin"},
+          ${user?.nickname || user?.name?.split(" ")[0] || sessionUserName?.split(" ")[0] || "Saya"},
           ${userEmail},
-          ${user?.image || session.user.image || null},
+          ${user?.image || sessionUserImage || null},
           ${user?.avatarCardId || "cat-prince"},
           ${user?.role || "GROOM"},
           ${user?.phone || null},
