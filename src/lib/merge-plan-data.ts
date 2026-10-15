@@ -108,8 +108,8 @@ export function mergeEntityList<T extends { id?: string }>(
         merged.completed = incAny.completed ?? exAny.completed;
       }
 
-      // Preserve notes/details if incoming is empty but existing had content
-      if (exAny.notes && !incAny.notes) {
+      // Preserve notes/details only if incoming property is undefined
+      if (exAny.notes !== undefined && incAny.notes === undefined) {
         merged.notes = exAny.notes;
       }
 
@@ -122,9 +122,7 @@ export function mergeEntityList<T extends { id?: string }>(
           deletedIdsSet
         );
         merged.deposits = mergedDeposits;
-        if (mergedDeposits.length > 0) {
-          merged.currentAmount = mergedDeposits.reduce((acc: number, d: any) => acc + (d.amount || 0), 0);
-        }
+        merged.currentAmount = mergedDeposits.reduce((acc: number, d: any) => acc + (d.amount || 0), 0);
       }
 
       if (merged.id) seenIds.add(merged.id);
@@ -286,11 +284,12 @@ export function mergePlanData(existing: PlanData = {}, incoming: PlanData = {}):
     deletedSet
   );
 
-  const mergedAdminSteps = (incoming.adminSteps && incoming.adminSteps.length > 0)
-    ? incoming.adminSteps
-    : (existing.adminSteps && existing.adminSteps.length > 0)
-    ? existing.adminSteps
-    : [];
+  const mergedAdminSteps = mergeEntityList(
+    existing.adminSteps || [],
+    incoming.adminSteps || [],
+    "title",
+    deletedSet
+  );
 
   const mergedActivityLogs = mergeActivityLogs(existing.activityLogs || [], incoming.activityLogs || []);
 
