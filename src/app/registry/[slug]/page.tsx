@@ -13,7 +13,7 @@ import {
   Tv,
   Check,
 } from "lucide-react";
-import { useWedding } from "@/context/wedding-context";
+import Link from "next/link";
 import { PostWeddingItem } from "@/types";
 import { formatRupiah } from "@/lib/utils";
 import confetti from "canvas-confetti";
@@ -22,32 +22,44 @@ import { showToastSuccess, showToastError } from "@/lib/swal";
 export default function DynamicRegistryPage() {
   const params = useParams();
   const slug = (params?.slug as string) || "kami-berdua";
-  const { wedding } = useWedding();
 
-  const [weddingData, setWeddingData] = useState(wedding);
+  const [weddingData, setWeddingData] = useState<any | null>(null);
   const [dbItems, setDbItems] = useState<PostWeddingItem[]>([]);
+  const [pageStatus, setPageStatus] = useState<"loading" | "ready" | "notFound">("loading");
 
   useEffect(() => {
     async function loadRegistryBySlug() {
       try {
+        setPageStatus("loading");
         const res = await fetch(`/api/wedding/sync?slug=${encodeURIComponent(slug)}`);
         const data = await res.json();
-        if (data.success && data.wedding) {
+        if (data.success && data.exists && data.wedding) {
           setWeddingData(data.wedding);
-        }
-        if (data.success && data.planData && Array.isArray(data.planData.postWedding)) {
-          setDbItems(data.planData.postWedding);
+          if (data.planData && Array.isArray(data.planData.postWedding)) {
+            setDbItems(data.planData.postWedding);
+          } else {
+            setDbItems([]);
+          }
+          setPageStatus("ready");
+        } else {
+          setWeddingData(null);
+          setDbItems([]);
+          setPageStatus("notFound");
         }
       } catch (e) {
         console.error("Failed to load registry from DB", e);
+        setWeddingData(null);
+        setDbItems([]);
+        setPageStatus("notFound");
       }
     }
     if (slug) {
       loadRegistryBySlug();
+    } else {
+      setPageStatus("notFound");
     }
   }, [slug]);
 
-  const activeWedding = (weddingData && (weddingData.groomName || weddingData.brideName)) ? weddingData : wedding;
   const activePostWedding = dbItems;
 
   const [claimingId, setClaimingId] = useState<string | null>(null);
@@ -57,7 +69,7 @@ export default function DynamicRegistryPage() {
 
   const handleClaimSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!claimingId || !friendName.trim()) return;
+    if (!claimingId || !friendName.trim() || !weddingData) return;
 
     // 1. Persist direct to database
     try {
@@ -67,7 +79,7 @@ export default function DynamicRegistryPage() {
         body: JSON.stringify({
           action: "CLAIM_GIFT",
           slug,
-          weddingId: activeWedding.id,
+          weddingId: weddingData.id,
           itemId: claimingId,
           friendName: friendName.trim(),
         }),
@@ -103,6 +115,52 @@ export default function DynamicRegistryPage() {
     setFriendName("");
   };
 
+  if (pageStatus === "loading") {
+    return (
+      <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-amber-100 shadow-xl text-center space-y-4 animate-pulse">
+          <div className="w-16 h-16 rounded-2xl bg-amber-100/60 mx-auto" />
+          <div className="h-6 bg-slate-200 rounded-full w-3/4 mx-auto" />
+          <div className="h-4 bg-slate-100 rounded-full w-1/2 mx-auto" />
+          <div className="h-10 bg-slate-100 rounded-xl w-full mt-4" />
+        </div>
+      </div>
+    );
+  }
+
+  if (pageStatus === "notFound" || !weddingData) {
+    return (
+      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4">
+        <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-slate-200 shadow-xl text-center space-y-5">
+          <div className="w-16 h-16 rounded-2xl bg-pastel-50 border border-pastel-200 flex items-center justify-center text-pastel-700 mx-auto">
+            <Gift className="w-8 h-8 text-pastel-600" />
+          </div>
+
+          <div>
+            <span className="text-xs font-bold uppercase tracking-wider text-amber-800 bg-amber-50 px-3 py-1 rounded-full border border-amber-200">
+              Registry Tidak Ditemukan
+            </span>
+            <h1 className="text-2xl font-black text-slate-900 mt-3 font-serif">
+              404 • Registry Belum Terdaftar
+            </h1>
+            <p className="text-xs text-slate-500 mt-2 leading-relaxed">
+              Daftar kado pernikahan dengan tautan ini tidak ditemukan atau alamat tautan telah diubah oleh calon pengantin.
+            </p>
+          </div>
+
+          <div className="pt-2">
+            <Link
+              href="/"
+              className="inline-flex items-center justify-center gap-2 w-full py-3 px-4 rounded-xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs shadow-xs transition-colors"
+            >
+              <span>Kembali ke Beranda HajatKita</span>
+            </Link>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-slate-800 p-4 sm:p-6 md:p-10 flex flex-col items-center">
       <div className="max-w-3xl w-full space-y-6">
@@ -120,8 +178,8 @@ export default function DynamicRegistryPage() {
               Wishlist Kado Pernikahan
             </h1>
             <p className="text-sm font-serif italic text-amber-700">
-              {activeWedding.groomName && activeWedding.brideName
-                ? `${activeWedding.groomName} & ${activeWedding.brideName}`
+              {weddingData.groomName && weddingData.brideName
+                ? `${weddingData.groomName} & ${weddingData.brideName}`
                 : "Calon Mempelai"}
             </p>
           </div>

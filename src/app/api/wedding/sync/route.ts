@@ -329,6 +329,16 @@ export async function POST(req: NextRequest) {
     }
 
     const clientIp = getClientIp(req);
+
+    // Reject all payloads exceeding 2MB before reading the full stream
+    const contentLength = req.headers.get("content-length");
+    if (contentLength && parseInt(contentLength, 10) > 2 * 1024 * 1024) {
+      return NextResponse.json(
+        { success: false, message: "Ukuran permintaan melebihi batas maksimal (2MB)" },
+        { status: 413 }
+      );
+    }
+
     const rawBody = await req.text();
     let body: any;
     try {
@@ -337,9 +347,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: false, message: "Format JSON tidak valid" }, { status: 400 });
     }
 
-    // Enforce 10KB payload limit for public unauthenticated endpoints
+    // Enforce 10KB payload limit in bytes for public unauthenticated endpoints
     if (body?.action === "RSVP" || body?.action === "CLAIM_GIFT") {
-      if (rawBody.length > 10 * 1024) {
+      if (Buffer.byteLength(rawBody, "utf8") > 10 * 1024) {
         return NextResponse.json(
           { success: false, message: "Ukuran permintaan melebihi batas maksimal (10KB)" },
           { status: 413 }

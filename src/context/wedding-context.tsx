@@ -600,7 +600,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       if (typeof document !== "undefined" && document.hidden) return;
       if (currentUser?.email) {
         fetchDbData(currentUser.email);
-      } else if (wedding.inviteCode && wedding.inviteCode !== "HAJAT-89X2") {
+      } else if (
+        wedding.inviteCode &&
+        wedding.id &&
+        wedding.id.length > 10 &&
+        wedding.id !== "w-main"
+      ) {
         fetchDbData(undefined, wedding.inviteCode);
       }
     };
@@ -618,7 +623,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isInitialized, currentUser?.email, wedding.inviteCode, fetchDbData]);
+  }, [isInitialized, currentUser?.email, wedding.id, wedding.inviteCode, fetchDbData]);
 
   // 1. Initial Load from LocalStorage
   useEffect(() => {
