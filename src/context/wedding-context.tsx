@@ -21,6 +21,7 @@ import {
 } from "@/types";
 import { getDefaultCuteCardForRole } from "@/lib/cute-cards";
 import { showToastWarning } from "@/lib/swal";
+import { mergePlanData } from "@/lib/merge-plan-data";
 
 const STORAGE_KEY = "HAJAT_KITA_STORE_V2";
 const AUTH_STORAGE_KEY = "HAJAT_AUTH_USER_V2";
@@ -306,6 +307,14 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const [alignmentTopics, setAlignmentTopics] = useState<AlignmentTopic[]>([]);
   const [adminSteps, setAdminSteps] = useState<AdminStep[]>(officialAdminSteps);
   const [activityLogs, setActivityLogs] = useState<ActivityLog[]>([]);
+  const [deletedItemIds, setDeletedItemIds] = useState<string[]>([]);
+  const deletedItemIdsRef = useRef<Set<string>>(new Set());
+
+  const trackDeletedId = useCallback((id: string) => {
+    if (!id) return;
+    deletedItemIdsRef.current.add(id);
+    setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+  }, []);
 
   const { data: session } = useSession();
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -381,6 +390,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
   }), [
     wedding,
     savingContributions,
@@ -395,6 +405,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    deletedItemIds,
   ]);
 
   // Keep latest payload ref always updated with latest state
@@ -531,23 +542,28 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           setWedding(updatedWedding);
         }
 
-        // Bug D: Apply ALL fields consistently from server, including defaults and empty arrays
-        const p = data.planData || {};
-        const incomingSavings = (Array.isArray(p.savingContributions) ? p.savingContributions : []).map((c: any) => ({
+        const remotePlan = data.planData || {};
+        const localPlan = latestPayloadRef.current || buildPlanPayload();
+
+        // Bi-directional smart reconciliation:
+        // Combines local/offline data with remote server data so neither device loses items
+        const mergedPlan = mergePlanData(localPlan, remotePlan);
+
+        const incomingSavings = (Array.isArray(mergedPlan.savingContributions) ? mergedPlan.savingContributions : []).map((c: any) => ({
           ...c,
           id: c.id || `sc-${crypto.randomUUID()}`,
         }));
-        const incomingChecklist = Array.isArray(p.checklist) ? p.checklist : [];
-        const incomingSeserahan = Array.isArray(p.seserahan) ? p.seserahan : [];
-        const incomingPostWedding = Array.isArray(p.postWedding) ? p.postWedding : [];
-        const incomingGuests = Array.isArray(p.guests) ? p.guests : [];
-        const incomingFamilyQuota = p.familyQuota || defaultFamilyQuota;
-        const incomingRundown = Array.isArray(p.rundown) ? p.rundown : [];
-        const incomingBudgetCategories = Array.isArray(p.budgetCategories) ? p.budgetCategories : [];
-        const incomingVendors = Array.isArray(p.vendors) ? p.vendors : [];
-        const incomingAlignmentTopics = Array.isArray(p.alignmentTopics) ? p.alignmentTopics : [];
-        const incomingAdminSteps = Array.isArray(p.adminSteps) && p.adminSteps.length > 0 ? p.adminSteps : officialAdminSteps;
-        const incomingActivityLogs = Array.isArray(p.activityLogs) ? p.activityLogs : [];
+        const incomingChecklist = Array.isArray(mergedPlan.checklist) ? mergedPlan.checklist : [];
+        const incomingSeserahan = Array.isArray(mergedPlan.seserahan) ? mergedPlan.seserahan : [];
+        const incomingPostWedding = Array.isArray(mergedPlan.postWedding) ? mergedPlan.postWedding : [];
+        const incomingGuests = Array.isArray(mergedPlan.guests) ? mergedPlan.guests : [];
+        const incomingFamilyQuota = mergedPlan.familyQuota || defaultFamilyQuota;
+        const incomingRundown = Array.isArray(mergedPlan.rundown) ? mergedPlan.rundown : [];
+        const incomingBudgetCategories = Array.isArray(mergedPlan.budgetCategories) ? mergedPlan.budgetCategories : [];
+        const incomingVendors = Array.isArray(mergedPlan.vendors) ? mergedPlan.vendors : [];
+        const incomingAlignmentTopics = Array.isArray(mergedPlan.alignmentTopics) ? mergedPlan.alignmentTopics : [];
+        const incomingAdminSteps = Array.isArray(mergedPlan.adminSteps) && mergedPlan.adminSteps.length > 0 ? mergedPlan.adminSteps : officialAdminSteps;
+        const incomingActivityLogs = Array.isArray(mergedPlan.activityLogs) ? mergedPlan.activityLogs : [];
 
         setSavingContributions(incomingSavings);
         setChecklist(incomingChecklist);
@@ -562,21 +578,30 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setAdminSteps(incomingAdminSteps);
         setActivityLogs(incomingActivityLogs);
 
-        // Bug B: Record applied remote hash so Auto-Save doesn't echo back to server
+        if (Array.isArray(mergedPlan.deletedItemIds)) {
+          for (const dId of mergedPlan.deletedItemIds) {
+            deletedItemIdsRef.current.add(dId);
+          }
+          setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+        }
+
+        // Bug B: Record applied remote hash based on what server provided.
+        // If local state had additional items merged in, currentPayload will differ from remote hash,
+        // which triggers auto-save naturally to sync those local items up to Neon!
         lastServerHashRef.current = hashPayload({
           wedding: updatedWedding,
-          savingContributions: incomingSavings,
-          checklist: incomingChecklist,
-          seserahan: incomingSeserahan,
-          postWedding: incomingPostWedding,
-          guests: incomingGuests,
-          familyQuota: incomingFamilyQuota,
-          rundown: incomingRundown,
-          budgetCategories: incomingBudgetCategories,
-          vendors: incomingVendors,
-          alignmentTopics: incomingAlignmentTopics,
-          adminSteps: incomingAdminSteps,
-          activityLogs: incomingActivityLogs,
+          savingContributions: remotePlan.savingContributions || incomingSavings,
+          checklist: remotePlan.checklist || incomingChecklist,
+          seserahan: remotePlan.seserahan || incomingSeserahan,
+          postWedding: remotePlan.postWedding || incomingPostWedding,
+          guests: remotePlan.guests || incomingGuests,
+          familyQuota: remotePlan.familyQuota || incomingFamilyQuota,
+          rundown: remotePlan.rundown || incomingRundown,
+          budgetCategories: remotePlan.budgetCategories || incomingBudgetCategories,
+          vendors: remotePlan.vendors || incomingVendors,
+          alignmentTopics: remotePlan.alignmentTopics || incomingAlignmentTopics,
+          adminSteps: remotePlan.adminSteps || incomingAdminSteps,
+          activityLogs: remotePlan.activityLogs || incomingActivityLogs,
         });
       } else if (data.success && !data.exists) {
         hasLoadedRemoteRef.current = true;
@@ -663,6 +688,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           if (parsed.alignmentTopics) setAlignmentTopics(parsed.alignmentTopics);
           if (parsed.adminSteps) setAdminSteps(parsed.adminSteps);
           if (parsed.activityLogs) setActivityLogs(parsed.activityLogs);
+          if (Array.isArray(parsed.deletedItemIds)) {
+            for (const dId of parsed.deletedItemIds) {
+              deletedItemIdsRef.current.add(dId);
+            }
+            setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+          }
         }
       }
     } catch (e) {
@@ -690,6 +721,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         alignmentTopics,
         adminSteps,
         activityLogs,
+        deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
       };
       localStorage.setItem(STORAGE_KEY, JSON.stringify(payload));
     } catch (e) {
@@ -710,6 +742,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    deletedItemIds,
   ]);
 
   // 3. Auto-Save to Neon Database (Debounced 500ms across Local & Deploy)
@@ -814,7 +847,44 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             if (resData.weddingId) {
               setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
             }
-            lastServerHashRef.current = hashPayload(payloadToSave);
+
+            if (resData.planData) {
+              const p = resData.planData;
+              if (Array.isArray(p.seserahan)) setSeserahan(p.seserahan);
+              if (Array.isArray(p.postWedding)) setPostWedding(p.postWedding);
+              if (Array.isArray(p.checklist)) setChecklist(p.checklist);
+              if (Array.isArray(p.guests)) setGuests(p.guests);
+              if (p.familyQuota) setFamilyQuota(p.familyQuota);
+              if (Array.isArray(p.rundown)) setRundown(p.rundown);
+              if (Array.isArray(p.budgetCategories)) setBudgetCategories(p.budgetCategories);
+              if (Array.isArray(p.vendors)) setVendors(p.vendors);
+              if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
+              if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
+              if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
+              if (Array.isArray(p.deletedItemIds)) {
+                for (const dId of p.deletedItemIds) {
+                  deletedItemIdsRef.current.add(dId);
+                }
+                setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+              }
+              lastServerHashRef.current = hashPayload({
+                wedding: weddingRef.current,
+                savingContributions: p.savingContributions || [],
+                checklist: p.checklist || [],
+                seserahan: p.seserahan || [],
+                postWedding: p.postWedding || [],
+                guests: p.guests || [],
+                familyQuota: p.familyQuota || defaultFamilyQuota,
+                rundown: p.rundown || [],
+                budgetCategories: p.budgetCategories || [],
+                vendors: p.vendors || [],
+                alignmentTopics: p.alignmentTopics || [],
+                adminSteps: p.adminSteps || officialAdminSteps,
+                activityLogs: p.activityLogs || [],
+              });
+            } else {
+              lastServerHashRef.current = hashPayload(payloadToSave);
+            }
           } else {
             console.warn("Auto-save returned error from server:", resData?.error || resData?.message);
             triggerRetry(attempt);
@@ -889,6 +959,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    deletedItemIds,
     buildPlanPayload,
     fetchDbData,
   ]);
@@ -939,7 +1010,44 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         if (resData.weddingId) {
           setWedding((prev) => (prev.id !== resData.weddingId ? { ...prev, id: resData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
         }
-        lastServerHashRef.current = hashPayload(payload);
+
+        if (resData.planData) {
+          const p = resData.planData;
+          if (Array.isArray(p.seserahan)) setSeserahan(p.seserahan);
+          if (Array.isArray(p.postWedding)) setPostWedding(p.postWedding);
+          if (Array.isArray(p.checklist)) setChecklist(p.checklist);
+          if (Array.isArray(p.guests)) setGuests(p.guests);
+          if (p.familyQuota) setFamilyQuota(p.familyQuota);
+          if (Array.isArray(p.rundown)) setRundown(p.rundown);
+          if (Array.isArray(p.budgetCategories)) setBudgetCategories(p.budgetCategories);
+          if (Array.isArray(p.vendors)) setVendors(p.vendors);
+          if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
+          if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
+          if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
+          if (Array.isArray(p.deletedItemIds)) {
+            for (const dId of p.deletedItemIds) {
+              deletedItemIdsRef.current.add(dId);
+            }
+            setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+          }
+          lastServerHashRef.current = hashPayload({
+            wedding: weddingRef.current,
+            savingContributions: p.savingContributions || [],
+            checklist: p.checklist || [],
+            seserahan: p.seserahan || [],
+            postWedding: p.postWedding || [],
+            guests: p.guests || [],
+            familyQuota: p.familyQuota || defaultFamilyQuota,
+            rundown: p.rundown || [],
+            budgetCategories: p.budgetCategories || [],
+            vendors: p.vendors || [],
+            alignmentTopics: p.alignmentTopics || [],
+            adminSteps: p.adminSteps || officialAdminSteps,
+            activityLogs: p.activityLogs || [],
+          });
+        } else {
+          lastServerHashRef.current = hashPayload(payload);
+        }
         return true;
       }
       return false;
@@ -1043,6 +1151,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setAlignmentTopics([]);
     setAdminSteps(officialAdminSteps);
     setActivityLogs([]);
+    deletedItemIdsRef.current.clear();
+    setDeletedItemIds([]);
 
     // Reset sync refs
     hasLoadedRemoteRef.current = false;
@@ -1338,6 +1448,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteChecklist = (id: string) => {
+    trackDeletedId(id);
     setChecklist((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -1361,6 +1472,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteSeserahan = (id: string) => {
+    trackDeletedId(id);
     setSeserahan((prev) => prev.filter((s) => s.id !== id));
   };
 
@@ -1394,6 +1506,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deletePostWedding = (id: string) => {
+    trackDeletedId(id);
     setPostWedding((prev) => prev.filter((item) => item.id !== id));
   };
 
@@ -1411,6 +1524,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteGuest = (id: string) => {
+    trackDeletedId(id);
     setGuests((prev) => prev.filter((g) => g.id !== id));
   };
 
@@ -1466,6 +1580,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteRundown = (id: string) => {
+    trackDeletedId(id);
     setRundown((prev) => prev.filter((r) => r.id !== id));
   };
 
@@ -1483,6 +1598,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteBudgetCategory = (id: string) => {
+    trackDeletedId(id);
     setBudgetCategories((prev) => prev.filter((b) => b.id !== id));
   };
 
@@ -1515,6 +1631,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteVendor = (id: string) => {
+    trackDeletedId(id);
     setVendors((prev) => prev.filter((v) => v.id !== id));
   };
 
@@ -1575,6 +1692,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   };
 
   const deleteAlignmentTopic = (id: string) => {
+    trackDeletedId(id);
     setAlignmentTopics((prev) => prev.filter((t) => t.id !== id));
     addActivity(currentUser?.name || "Calon Pengantin", currentUser?.role || "GROOM", "Menghapus topik diskusi pranikah");
   };
@@ -1618,6 +1736,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     setAlignmentTopics([]);
     setAdminSteps(officialAdminSteps.map((s) => ({ ...s, requirements: s.requirements.map((r) => ({ ...r, isDone: false })) })));
     setActivityLogs([]);
+    deletedItemIdsRef.current.clear();
+    setDeletedItemIds([]);
     setWedding((prev) => ({
       ...prev,
       targetBudget: 0,

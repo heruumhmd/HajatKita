@@ -6,8 +6,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
-import { z } from "zod";
 import { findWeddingForEmail } from "@/db/find-wedding";
+import { mergePlanData } from "@/lib/merge-plan-data";
+import { z } from "zod";
 
 // In-memory rate limiting per IP (10 requests per minute)
 // NOTE: For multi-instance / serverless deployment (e.g. Vercel),
@@ -369,7 +370,7 @@ export async function POST(req: NextRequest) {
 
       const parseResult = rsvpSchema.safeParse(body);
       if (!parseResult.success) {
-        const errMsg = parseResult.error.errors.map((e) => e.message).join(", ");
+        const errMsg = parseResult.error.errors.map((e: any) => e.message).join(", ");
         return NextResponse.json({ success: false, message: errMsg || "Data RSVP tidak valid" }, { status: 400 });
       }
 
@@ -469,7 +470,7 @@ export async function POST(req: NextRequest) {
 
       const parseResult = claimGiftSchema.safeParse(body);
       if (!parseResult.success) {
-        const errMsg = parseResult.error.errors.map((e) => e.message).join(", ");
+        const errMsg = parseResult.error.errors.map((e: any) => e.message).join(", ");
         return NextResponse.json({ success: false, message: errMsg || "Data klaim kado tidak valid" }, { status: 400 });
       }
 
@@ -609,8 +610,10 @@ export async function POST(req: NextRequest) {
       `;
     }
 
-    // 2. Package planData JSON
-    const planDataJson = JSON.stringify({
+    const inviteCode = (wedding?.inviteCode || "HAJAT-" + Math.random().toString(36).substring(2, 8).toUpperCase()).toUpperCase();
+
+    // 2. Incoming Plan Payload Construction
+    const incomingPlanData = {
       savingContributions: savingContributions || [],
       checklist: checklist || [],
       seserahan: seserahan || [],
@@ -623,18 +626,30 @@ export async function POST(req: NextRequest) {
       alignmentTopics: alignmentTopics || [],
       adminSteps: adminSteps || [],
       activityLogs: activityLogs || [],
-    });
-
-    const inviteCode = (wedding?.inviteCode || "HAJAT-" + Math.random().toString(36).substring(2, 8).toUpperCase()).toUpperCase();
+      deletedItemIds: body?.deletedItemIds || [],
+    };
 
     // 3. Deterministic Wedding Resolution using authenticated session email
     const existingWedding = await findWeddingForEmail(userEmail);
 
     let savedWeddingId: string;
     let savedWeddingVersion: number = 0;
+    let finalPlanData: any;
 
     if (existingWedding) {
       savedWeddingId = existingWedding.id;
+
+      // Smart Reconciliation: Merge incoming changes with existing plan in DB so no missing items are lost
+      let existingPlan = {};
+      if (existingWedding.plan_data) {
+        try {
+          existingPlan = JSON.parse(existingWedding.plan_data);
+        } catch (e) {
+          console.error("Failed to parse existing plan_data for merge", e);
+        }
+      }
+      finalPlanData = mergePlanData(existingPlan, incomingPlanData);
+      const planDataJson = JSON.stringify(finalPlanData);
 
       // CRITICAL SAFEGUARD: Preserve connected partner state from DB and couple_history!
       // An out-of-date client state must NOT disconnect an active partner.
@@ -736,6 +751,9 @@ export async function POST(req: NextRequest) {
 
       savedWeddingVersion = Number(updateResult[0].version || 0);
     } else {
+      finalPlanData = incomingPlanData;
+      const planDataJson = JSON.stringify(finalPlanData);
+
       let validWeddingDate: string | null = null;
       if (wedding?.weddingDate) {
         if (typeof wedding.weddingDate === "string" && wedding.weddingDate.trim() !== "") {
@@ -790,6 +808,7 @@ export async function POST(req: NextRequest) {
       weddingId: savedWeddingId,
       inviteCode,
       version: savedWeddingVersion,
+      planData: finalPlanData,
     });
   } catch (error: any) {
     console.error("Error in POST /api/wedding/sync:", error);
