@@ -12,6 +12,13 @@ test.describe("E2E: Public Digital Invitation & Registry XSS / Security", () => 
     await page.goto("/invitation/test-andi-siti");
     await page.waitForLoadState("domcontentloaded");
 
+    // Look for envelope button and open it if present
+    const openEnvelopeBtn = page.locator("button:has-text('Buka Undangan')");
+    if (await openEnvelopeBtn.isVisible()) {
+      await openEnvelopeBtn.click();
+      await page.waitForTimeout(700);
+    }
+
     // Look for RSVP name input if present
     const nameInput = page.locator("input[placeholder*='Nama'], input[name='name']").first();
     if (await nameInput.isVisible()) {

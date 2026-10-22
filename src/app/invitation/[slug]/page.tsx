@@ -1,7 +1,7 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import React, { useState, useEffect, Suspense } from "react";
+import { useParams, useSearchParams } from "next/navigation";
 import {
   Calendar,
   Clock,
@@ -13,17 +13,25 @@ import {
   Gift,
   Share2,
   ChevronDown,
+  Mail,
+  MailOpen,
 } from "lucide-react";
 import Link from "next/link";
 import confetti from "canvas-confetti";
 import { showSuccessAlert, showToastError } from "@/lib/swal";
 
-export default function DynamicInvitationPage() {
+function DynamicInvitationContent() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const slug = (params?.slug as string) || "kami-berdua";
+  const toGuestParam = searchParams.get("to") || searchParams.get("guest") || "";
 
   const [weddingData, setWeddingData] = useState<any | null>(null);
   const [pageStatus, setPageStatus] = useState<"loading" | "ready" | "notFound">("loading");
+
+  // 3D Envelope State
+  const [isEnvelopeOpen, setIsEnvelopeOpen] = useState(false);
+  const [isFlapOpening, setIsFlapOpening] = useState(false);
 
   useEffect(() => {
     async function loadWeddingBySlug() {
@@ -52,13 +60,19 @@ export default function DynamicInvitationPage() {
   }, [slug]);
 
   // Guest RSVP Form State
-  const [guestName, setGuestName] = useState("");
+  const [guestName, setGuestName] = useState(toGuestParam);
   const [guestPhone, setGuestPhone] = useState("");
   const [guestSide, setGuestSide] = useState<"GROOM" | "BRIDE" | "BOTH">("BOTH");
   const [rsvpStatus, setRsvpStatus] = useState<"CONFIRMED_ATTENDING" | "DECLINED">("CONFIRMED_ATTENDING");
   const [pax, setPax] = useState(2);
   const [wishes, setWishes] = useState("");
   const [submitted, setSubmitted] = useState(false);
+
+  useEffect(() => {
+    if (toGuestParam) {
+      setGuestName((prev) => prev || toGuestParam);
+    }
+  }, [toGuestParam]);
 
   // Countdown timer
   const [timeLeft, setTimeLeft] = useState({ days: 0, hours: 0, minutes: 0, seconds: 0 });
@@ -92,6 +106,22 @@ export default function DynamicInvitationPage() {
     const interval = setInterval(updateCountdown, 1000);
     return () => clearInterval(interval);
   }, [weddingData?.weddingDate]);
+
+  const handleOpenEnvelope = () => {
+    setIsFlapOpening(true);
+    setTimeout(() => {
+      setIsEnvelopeOpen(true);
+      try {
+        confetti({
+          particleCount: 65,
+          spread: 60,
+          origin: { y: 0.6 },
+        });
+      } catch (e) {
+        console.warn(e);
+      }
+    }, 600);
+  };
 
   const handleRsvpSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -205,8 +235,100 @@ export default function DynamicInvitationPage() {
       })
     : "Menunggu Penentuan Tanggal";
 
+  if (!isEnvelopeOpen) {
+    return (
+      <div className="min-h-screen bg-[#FAF7F2] text-slate-800 flex flex-col items-center justify-center p-4 sm:p-6 perspective-1000">
+        <div className="w-full max-w-lg mx-auto flex flex-col items-center text-center space-y-6">
+          {/* Subtle Top Badge */}
+          <div className="inline-flex items-center gap-1.5 px-4 py-1.5 rounded-full bg-amber-50 border border-amber-200/80 text-amber-800 text-xs font-semibold uppercase tracking-widest shadow-2xs">
+            <Sparkles className="w-3.5 h-3.5 text-amber-600" />
+            <span>Undangan Pernikahan Digital</span>
+          </div>
+
+          {/* 3D Envelope Container */}
+          <div className="relative w-full aspect-[4/3] sm:aspect-[16/11] max-w-md mx-auto preserve-3d">
+            {/* Envelope Back Base */}
+            <div className="absolute inset-0 bg-[#F5EFE6] rounded-3xl border border-amber-200/90 shadow-2xl overflow-hidden flex flex-col items-center justify-center p-6 sm:p-8">
+              {/* Gold Foil Accent Ring */}
+              <div className="absolute inset-2 border border-amber-300/40 rounded-2xl pointer-events-none" />
+
+              {/* Recipient Letter Preview */}
+              <div className="space-y-3 z-10">
+                <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                  Kepada Yth. Bpk/Ibu/Saudara/i:
+                </span>
+                <h2 className="text-2xl sm:text-3xl font-serif font-black text-slate-900 tracking-tight">
+                  {toGuestParam || "Tamu Undangan"}
+                </h2>
+                <div className="w-16 h-0.5 bg-gradient-to-r from-transparent via-amber-400 to-transparent mx-auto" />
+                <p className="text-xs uppercase tracking-widest text-amber-800 font-serif font-bold">
+                  {weddingData.groomName || "Calon Suami"} &amp; {weddingData.brideName || "Calon Istri"}
+                </p>
+                <p className="text-[11px] text-slate-500 font-medium">
+                  {formattedDate}
+                </p>
+              </div>
+            </div>
+
+            {/* 3D Triangular Flap */}
+            <div
+              className="absolute top-0 left-0 right-0 h-1/2 bg-gradient-to-b from-[#FAF4EC] to-[#EFE8DC] border-b-2 border-amber-300/80 shadow-md preserve-3d origin-top transition-transform duration-700 ease-out z-20 flex items-center justify-center pointer-events-none"
+              style={{
+                clipPath: "polygon(0 0, 100% 0, 50% 100%)",
+                transform: isFlapOpening ? "rotateX(180deg)" : "rotateX(0deg)",
+                transformOrigin: "top",
+              }}
+            >
+              {/* Wax Seal Monogram */}
+              <div className="absolute bottom-2 w-12 h-12 rounded-full bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 border-2 border-amber-300 shadow-md flex items-center justify-center text-amber-100 font-serif font-black text-sm">
+                💍
+              </div>
+            </div>
+          </div>
+
+          {/* Open Invitation Action */}
+          <div className="pt-2 space-y-2">
+            <button
+              type="button"
+              onClick={handleOpenEnvelope}
+              disabled={isFlapOpening}
+              className="inline-flex items-center gap-2.5 px-8 py-4 rounded-2xl bg-gradient-to-r from-amber-600 via-amber-700 to-amber-800 hover:from-amber-700 hover:to-amber-900 text-white font-serif font-bold text-sm sm:text-base shadow-xl shadow-amber-900/20 hover:scale-105 active:scale-95 transition-all disabled:opacity-80 cursor-pointer"
+            >
+              <MailOpen className="w-5 h-5 text-amber-200" />
+              <span>{isFlapOpening ? "Membuka Amplop..." : "Buka Undangan"}</span>
+            </button>
+            <p className="text-[11px] text-slate-400 font-medium">
+              Ketuk untuk membuka lembar undangan sakral
+            </p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-[#FAF7F2] text-slate-800 flex flex-col items-center justify-start p-4 sm:p-6 md:p-10">
+      {/* Reopen Envelope Floating Trigger */}
+      <div className="w-full max-w-2xl mb-4 flex justify-between items-center text-xs">
+        <Link
+          href="/"
+          className="text-slate-500 hover:text-slate-800 font-semibold transition-colors"
+        >
+          ← Beranda HajatKita
+        </Link>
+        <button
+          type="button"
+          onClick={() => {
+            setIsEnvelopeOpen(false);
+            setIsFlapOpening(false);
+          }}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/90 border border-amber-200 text-amber-900 font-medium hover:bg-amber-50 shadow-2xs transition-all"
+        >
+          <Mail className="w-3.5 h-3.5 text-amber-700" />
+          <span>Lihat Sampul Amplop</span>
+        </button>
+      </div>
+
       {/* Decorative Border Container */}
       <div className="max-w-2xl w-full bg-white rounded-3xl shadow-xl border border-amber-100 overflow-hidden relative">
         {/* Top Header Floral / Gold Motif Accent */}
@@ -466,5 +588,23 @@ export default function DynamicInvitationPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function DynamicInvitationPage() {
+  return (
+    <Suspense
+      fallback={
+        <div className="min-h-screen bg-[#FAF7F2] flex items-center justify-center p-4">
+          <div className="max-w-md w-full bg-white rounded-3xl p-8 border border-amber-100 shadow-xl text-center space-y-4 animate-pulse">
+            <div className="w-16 h-16 rounded-2xl bg-amber-100/60 mx-auto" />
+            <div className="h-6 bg-slate-200 rounded-full w-3/4 mx-auto" />
+            <div className="h-4 bg-slate-100 rounded-full w-1/2 mx-auto" />
+          </div>
+        </div>
+      }
+    >
+      <DynamicInvitationContent />
+    </Suspense>
   );
 }

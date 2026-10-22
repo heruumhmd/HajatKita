@@ -228,90 +228,198 @@ export default function BudgetPage() {
             </button>
           </div>
         ) : (
-          <div className="overflow-x-auto -mx-6 px-6">
-            <table className="w-full text-left text-xs min-w-[640px]">
-              <thead>
-                <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
-                  <th className="pb-3 px-3">Pos Kebutuhan</th>
-                  <th className="pb-3 px-3">Vendor Rekanan</th>
-                  <th className="pb-3 px-3">Alokasi Anggaran</th>
-                  <th className="pb-3 px-3">Telah Dibayar</th>
-                  <th className="pb-3 px-3">Sisa Tagihan</th>
-                  <th className="pb-3 px-3 text-center">Status</th>
-                  <th className="pb-3 px-3 text-right">Aksi</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100 font-medium">
-                {budgetCategories.map((cat) => {
-                  const sisa = Math.max(0, cat.allocated - cat.spent);
-                  return (
-                    <tr key={cat.id} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3.5 px-3 font-bold text-slate-900">{cat.name}</td>
-                      <td className="py-3.5 px-3 text-slate-600">
-                        {cat.vendor || "Dana Cadangan Mandiri"}
-                      </td>
-                      <td className="py-3.5 px-3 font-bold font-mono text-slate-800">
-                        {formatRupiah(cat.allocated)}
-                      </td>
-                      <td className="py-3.5 px-3 font-mono text-emerald-700 font-bold">
-                        {formatRupiah(cat.spent)}
-                      </td>
-                      <td className="py-3.5 px-3 font-mono text-amber-800 font-bold">
-                        {formatRupiah(sisa)}
-                      </td>
-                      <td className="py-3.5 px-3 text-center">
-                        <span
-                          className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
-                            cat.status === "LUNAS"
-                              ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+          <>
+            {/* Desktop View: Tabular Table (lg:+) */}
+            <div className="hidden lg:block overflow-x-auto -mx-6 px-6">
+              <table className="w-full text-left text-xs min-w-[640px]">
+                <thead>
+                  <tr className="border-b border-slate-100 text-slate-400 font-bold uppercase tracking-wider">
+                    <th className="pb-3 px-3">Pos Kebutuhan</th>
+                    <th className="pb-3 px-3">Vendor Rekanan</th>
+                    <th className="pb-3 px-3">Alokasi Anggaran</th>
+                    <th className="pb-3 px-3">Telah Dibayar</th>
+                    <th className="pb-3 px-3">Sisa Tagihan</th>
+                    <th className="pb-3 px-3 text-center">Status</th>
+                    <th className="pb-3 px-3 text-right">Aksi</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {budgetCategories.map((cat) => {
+                    const sisa = Math.max(0, cat.allocated - cat.spent);
+                    return (
+                      <tr key={cat.id} className="hover:bg-slate-50/80 transition-colors">
+                        <td className="py-3.5 px-3 font-bold text-slate-900">{cat.name}</td>
+                        <td className="py-3.5 px-3 text-slate-600">
+                          {cat.vendor || "Dana Cadangan Mandiri"}
+                        </td>
+                        <td className="py-3.5 px-3 font-bold font-mono text-slate-800">
+                          {formatRupiah(cat.allocated)}
+                        </td>
+                        <td className="py-3.5 px-3 font-mono text-emerald-700 font-bold">
+                          {formatRupiah(cat.spent)}
+                        </td>
+                        <td className="py-3.5 px-3 font-mono text-amber-800 font-bold">
+                          {formatRupiah(sisa)}
+                        </td>
+                        <td className="py-3.5 px-3 text-center">
+                          <span
+                            className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                              cat.status === "LUNAS"
+                                ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
+                                : cat.status === "DP_TERBAYAR"
+                                ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                : "bg-slate-100 text-slate-600 border border-slate-200"
+                            }`}
+                          >
+                            {cat.status === "LUNAS"
+                              ? "LUNAS"
                               : cat.status === "DP_TERBAYAR"
-                              ? "bg-amber-50 text-amber-800 border border-amber-200"
-                              : "bg-slate-100 text-slate-600 border border-slate-200"
-                          }`}
-                        >
-                          {cat.status === "LUNAS"
-                            ? "LUNAS"
+                              ? "DP TERBAYAR"
+                              : "BELUM BAYAR"}
+                          </span>
+                        </td>
+                        <td className="py-3.5 px-3 text-right">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenEdit(cat)}
+                              className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
+                              title="Edit Pos Anggaran"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteCategory(cat)}
+                              className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                              title="Hapus Pos Anggaran"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="border-t-2 border-slate-200 font-extrabold text-slate-800 bg-slate-50/50">
+                    <td className="py-3 px-3">Total Anggaran</td>
+                    <td className="py-3 px-3 text-slate-500 font-normal">{budgetCategories.length} Pos</td>
+                    <td className="py-3 px-3 font-mono text-slate-900">{formatRupiah(totalAllocated)}</td>
+                    <td className="py-3 px-3 font-mono text-emerald-700">{formatRupiah(totalSpent)}</td>
+                    <td className="py-3 px-3 font-mono text-amber-800">{formatRupiah(remainingBudget)}</td>
+                    <td colSpan={2} />
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+
+            {/* Mobile & Tablet Portrait View: Stacked Financial Cards (< lg) */}
+            <div className="lg:hidden space-y-3">
+              {budgetCategories.map((cat) => {
+                const sisa = Math.max(0, cat.allocated - cat.spent);
+                const percentSpent = cat.allocated > 0 ? Math.min(100, Math.round((cat.spent / cat.allocated) * 100)) : 0;
+                return (
+                  <div
+                    key={cat.id}
+                    className="p-4 bg-slate-50/70 border border-slate-200/90 rounded-2xl space-y-3"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-slate-900 text-sm truncate">
+                          {cat.name}
+                        </h4>
+                        <p className="text-[11px] text-slate-500 truncate">
+                          {cat.vendor || "Dana Cadangan Mandiri"}
+                        </p>
+                      </div>
+
+                      <span
+                        className={`inline-block px-2.5 py-1 rounded-full text-[10px] font-bold shrink-0 ${
+                          cat.status === "LUNAS"
+                            ? "bg-emerald-50 text-emerald-800 border border-emerald-200"
                             : cat.status === "DP_TERBAYAR"
-                            ? "DP TERBAYAR"
-                            : "BELUM BAYAR"}
-                        </span>
-                      </td>
-                      <td className="py-3.5 px-3 text-right">
-                        <div className="flex items-center justify-end gap-1.5">
-                          <button
-                            type="button"
-                            onClick={() => handleOpenEdit(cat)}
-                            className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
-                            title="Edit Pos Anggaran"
-                          >
-                            <Edit2 className="w-3.5 h-3.5" />
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleDeleteCategory(cat)}
-                            className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
-                            title="Hapus Pos Anggaran"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-              <tfoot>
-                <tr className="border-t-2 border-slate-200 font-extrabold text-slate-800 bg-slate-50/50">
-                  <td className="py-3 px-3">Total Anggaran</td>
-                  <td className="py-3 px-3 text-slate-500 font-normal">{budgetCategories.length} Pos</td>
-                  <td className="py-3 px-3 font-mono text-slate-900">{formatRupiah(totalAllocated)}</td>
-                  <td className="py-3 px-3 font-mono text-emerald-700">{formatRupiah(totalSpent)}</td>
-                  <td className="py-3 px-3 font-mono text-amber-800">{formatRupiah(remainingBudget)}</td>
-                  <td colSpan={2} />
-                </tr>
-              </tfoot>
-            </table>
-          </div>
+                            ? "bg-amber-50 text-amber-800 border border-amber-200"
+                            : "bg-slate-100 text-slate-600 border border-slate-200"
+                        }`}
+                      >
+                        {cat.status === "LUNAS"
+                          ? "LUNAS"
+                          : cat.status === "DP_TERBAYAR"
+                          ? "DP TERBAYAR"
+                          : "BELUM BAYAR"}
+                      </span>
+                    </div>
+
+                    {/* Progress Bar */}
+                    <div className="space-y-1">
+                      <div className="w-full h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${
+                            cat.status === "LUNAS" ? "bg-emerald-500" : "bg-pastel-600"
+                          }`}
+                          style={{ width: `${percentSpent}%` }}
+                        />
+                      </div>
+                      <div className="flex justify-between text-[10px] text-slate-400">
+                        <span>Realisasi: {percentSpent}%</span>
+                        <span className="font-mono">Sisa: {formatRupiah(sisa)}</span>
+                      </div>
+                    </div>
+
+                    {/* Financial Figures Grid */}
+                    <div className="grid grid-cols-2 gap-2 pt-1 border-t border-slate-200/60 text-xs">
+                      <div>
+                        <span className="text-[10px] text-slate-500 font-medium block">Alokasi Anggaran</span>
+                        <span className="font-bold font-mono text-slate-800">{formatRupiah(cat.allocated)}</span>
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] text-slate-500 font-medium block">Telah Dibayar</span>
+                        <span className="font-bold font-mono text-emerald-700">{formatRupiah(cat.spent)}</span>
+                      </div>
+                    </div>
+
+                    {/* Action Buttons */}
+                    <div className="flex items-center justify-end gap-2 pt-2 border-t border-slate-200/60">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenEdit(cat)}
+                        className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-700 hover:text-pastel-700 font-semibold text-xs shadow-2xs"
+                      >
+                        <Edit2 className="w-3.5 h-3.5" />
+                        <span>Edit</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCategory(cat)}
+                        className="inline-flex items-center gap-1.5 min-h-[38px] px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-slate-400 hover:text-rose-600 font-semibold text-xs shadow-2xs"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                        <span>Hapus</span>
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {/* Mobile Total Summary Card */}
+              <div className="p-4 bg-slate-100/90 rounded-2xl border border-slate-200 text-xs space-y-2">
+                <div className="flex justify-between text-slate-700 font-bold">
+                  <span>Total Anggaran ({budgetCategories.length} Pos):</span>
+                  <span className="font-mono">{formatRupiah(totalAllocated)}</span>
+                </div>
+                <div className="flex justify-between text-emerald-800 font-bold">
+                  <span>Total Telah Dibayar:</span>
+                  <span className="font-mono">{formatRupiah(totalSpent)}</span>
+                </div>
+                <div className="flex justify-between text-amber-800 font-bold border-t border-slate-200 pt-1.5">
+                  <span>Total Sisa Kewajiban:</span>
+                  <span className="font-mono">{formatRupiah(remainingBudget)}</span>
+                </div>
+              </div>
+            </div>
+          </>
         )}
       </div>
 

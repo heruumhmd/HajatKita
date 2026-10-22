@@ -55,6 +55,64 @@ export function FinancialGuardBanner() {
                 </>
               )}
             </p>
+
+            {/* Dynamic Dual-Arc SVG Gauge */}
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3 pt-3 border-t border-slate-100/90 mt-2">
+              <div className="relative w-16 h-16 shrink-0 flex items-center justify-center">
+                <svg className="w-16 h-16 -rotate-90 transform" viewBox="0 0 100 100">
+                  {/* Outer Track (70% Resepsi) */}
+                  <circle cx="50" cy="50" r="38" fill="none" stroke="#E2E8F0" strokeWidth="8" />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="38"
+                    fill="none"
+                    stroke="#1D50A2"
+                    strokeWidth="8"
+                    strokeDasharray={2 * Math.PI * 38}
+                    strokeDashoffset={2 * Math.PI * 38 * (1 - 0.70)}
+                    strokeLinecap="round"
+                  />
+                  {/* Inner Track (30% Pasca-Nikah) */}
+                  <circle cx="50" cy="50" r="26" fill="none" stroke="#E2E8F0" strokeWidth="8" />
+                  <circle
+                    cx="50"
+                    cy="50"
+                    r="26"
+                    fill="none"
+                    stroke="#10B981"
+                    strokeWidth="8"
+                    strokeDasharray={2 * Math.PI * 26}
+                    strokeDashoffset={2 * Math.PI * 26 * (1 - 0.30)}
+                    strokeLinecap="round"
+                  />
+                </svg>
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none">
+                  <span className="text-[10px] font-black text-slate-800 font-mono">70/30</span>
+                </div>
+              </div>
+
+              <div className="flex-1 min-w-0 space-y-1 text-[11px]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-slate-700 font-semibold truncate">
+                    <span className="w-2.5 h-2.5 rounded-full bg-pastel-600 shrink-0" />
+                    Plafon Pesta Resepsi (Maks. 70%)
+                  </span>
+                  <span className="font-mono font-bold text-slate-900 shrink-0">
+                    {targetBudget > 0 ? formatRupiah(Math.round(targetBudget * 0.7)) : "70% Target"}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span className="flex items-center gap-1.5 text-emerald-800 font-semibold truncate">
+                    <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 shrink-0" />
+                    Dana Terkunci Pasca-Nikah (Min. 30%)
+                  </span>
+                  <span className="font-mono font-bold text-emerald-700 shrink-0">
+                    {targetBudget > 0 ? formatRupiah(recommendedPostWeddingFund) : "30% Target"}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
