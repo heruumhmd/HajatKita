@@ -754,6 +754,12 @@ export function SpotlightTour() {
       ? targetRect.top > window.innerHeight / 2
       : false;
 
+  const viewportWidth = typeof window !== "undefined" ? window.innerWidth : 400;
+  const safeWidth = targetRect ? Math.min(targetRect.width + 16, Math.max(0, viewportWidth - 16)) : 0;
+  const safeLeft = targetRect ? Math.max(8, Math.min(targetRect.left - 8, Math.max(8, viewportWidth - safeWidth - 8))) : 0;
+  const safeTop = targetRect ? Math.max(0, targetRect.top - 8) : 0;
+  const safeHeight = targetRect ? targetRect.height + 16 : 0;
+
   return (
     <div className="fixed inset-0 z-50 overflow-hidden pointer-events-auto">
       {/* 1. Transparent SVG Mask Overlay: 100% sharp inside the cutout, dimmed outside */}
@@ -765,10 +771,10 @@ export function SpotlightTour() {
             {/* Black area cuts out 100% transparent hole (ZERO BLUR, ZERO OVERLAY) */}
             {targetRect && (
               <rect
-                x={Math.max(0, targetRect.left - 8)}
-                y={Math.max(0, targetRect.top - 8)}
-                width={targetRect.width + 16}
-                height={targetRect.height + 16}
+                x={safeLeft}
+                y={safeTop}
+                width={safeWidth}
+                height={safeHeight}
                 rx="20"
                 ry="20"
                 fill="black"
@@ -791,10 +797,10 @@ export function SpotlightTour() {
         <div
           className="fixed pointer-events-none rounded-3xl transition-all duration-300 ease-out z-50 ring-4 ring-amber-400 ring-offset-2 ring-offset-transparent shadow-[0_0_40px_rgba(245,158,11,0.6)] border-2 border-amber-300/80"
           style={{
-            top: Math.max(0, targetRect.top - 8),
-            left: Math.max(0, targetRect.left - 8),
-            width: targetRect.width + 16,
-            height: targetRect.height + 16,
+            top: safeTop,
+            left: safeLeft,
+            width: safeWidth,
+            height: safeHeight,
           }}
         />
       )}
@@ -804,7 +810,7 @@ export function SpotlightTour() {
         className={`fixed z-50 max-w-lg w-[calc(100%-2rem)] sm:w-full mx-auto pointer-events-auto transition-all duration-300 ${
           isTargetInBottomHalf
             ? "top-4 sm:top-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
-            : "bottom-4 sm:bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
+            : "bottom-20 sm:bottom-8 left-4 right-4 sm:left-1/2 sm:right-auto sm:-translate-x-1/2"
         }`}
       >
         <div className="bg-white rounded-3xl shadow-2xl border border-slate-200 overflow-hidden flex flex-col max-h-[82vh] animate-in fade-in zoom-in-95 duration-200">

@@ -28,7 +28,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   } = useWedding();
 
   const isPublicRoute =
-    pathname.startsWith("/invitation/") || pathname.startsWith("/registry/");
+    pathname.startsWith("/invitation") || pathname.startsWith("/registry");
 
   const isLandingMode = pathname === "/" && !isLoggedIn && !guestEnteredWorkspace;
 
@@ -118,16 +118,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         onOpenMobileMenu={() => setIsMobileSidebarOpen(true)}
       />
 
-      {/* Main Content Area: md:pl-72 on desktop, pl-0 on mobile */}
-      <div className="flex-1 flex flex-col min-w-0 md:pl-72 pb-20 md:pb-10">
+      {/* Main Content Area: lg:pl-72 on desktop, pl-0 on mobile/tablet */}
+      <div className="flex-1 flex flex-col min-w-0 lg:pl-72 pb-20 lg:pb-10">
         {/* Unified Top Navbar Header */}
         <header className="sticky top-0 z-30 bg-[#FBFBFA]/95 backdrop-blur-md border-b border-slate-200/80 px-4 sm:px-6 lg:px-8 py-2.5 flex items-center justify-between gap-3">
-          {/* Left: Mobile Hamburger & Couple Title */}
+          {/* Left: Hamburger & Couple Title */}
           <div className="flex items-center gap-3 min-w-0">
             <button
               type="button"
               onClick={() => setIsMobileSidebarOpen(true)}
-              className="md:hidden p-2 rounded-xl text-slate-700 hover:text-pastel-700 hover:bg-slate-100 transition-colors"
+              className="lg:hidden p-2 rounded-xl text-slate-700 hover:text-pastel-700 hover:bg-slate-100 transition-colors"
               aria-label="Buka Menu Navigasi"
             >
               <Menu className="w-5 h-5" />

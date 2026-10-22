@@ -29,6 +29,12 @@ export function ThreeDScrollShowcase() {
 
     const handleScroll = () => {
       if (!containerRef.current) return;
+      if (typeof window !== "undefined" && window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+        setRotateX(0);
+        setRotateY(0);
+        setScale(1);
+        return;
+      }
       const rect = containerRef.current.getBoundingClientRect();
       const windowHeight = window.innerHeight;
 
@@ -40,11 +46,10 @@ export function ThreeDScrollShowcase() {
 
       setScrollProgress(progress);
 
-      // Interpolate 3D tilt dynamically along scroll
-      // As user scrolls, the card transitions from tilted backward (3D entrance) to straight, then forward
-      const targetRotateX = (0.5 - progress) * 22; // from ~+11deg to -11deg
-      const targetRotateY = (progress - 0.5) * -12;
-      const targetScale = 0.94 + Math.sin(progress * Math.PI) * 0.06;
+      // Subtle 3D tilt: max +/- 3 degrees to prevent visual distortion
+      const targetRotateX = (0.5 - progress) * 6;
+      const targetRotateY = (progress - 0.5) * -4;
+      const targetScale = 0.97 + Math.sin(progress * Math.PI) * 0.03;
 
       if (!isHovered) {
         setRotateX(targetRotateX);
@@ -67,9 +72,14 @@ export function ThreeDScrollShowcase() {
     };
   }, [isHovered]);
 
-  // Interactive mouse tilt on desktop
+  // Interactive mouse tilt on desktop fine-pointer devices only
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!containerRef.current) return;
+    if (typeof window !== "undefined") {
+      const isTouch = window.matchMedia("(hover: none) and (pointer: coarse)").matches;
+      const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+      if (isTouch || prefersReduced) return;
+    }
     setIsHovered(true);
     const rect = containerRef.current.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -81,9 +91,9 @@ export function ThreeDScrollShowcase() {
     const mouseXRatio = (x - centerX) / centerX;
     const mouseYRatio = (y - centerY) / centerY;
 
-    // Subtle responsive tilt
-    setRotateX(-mouseYRatio * 14);
-    setRotateY(mouseXRatio * 16);
+    // Refined subtle tilt (max +/- 3 degrees)
+    setRotateX(-mouseYRatio * 3);
+    setRotateY(mouseXRatio * 3);
   };
 
   const handleMouseLeave = () => {
@@ -345,11 +355,11 @@ export function ThreeDScrollShowcase() {
           </div>
         </div>
 
-        {/* Floating Badge 3: 100% Bebas AI Slop & Spesifik Budaya Indonesia */}
+        {/* Floating Badge 3: Spesifik Budaya Indonesia */}
         <div
-          className="hidden md:flex absolute top-1/2 -right-8 -translate-y-1/2 items-center gap-2 px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg text-[11px] font-bold"
+          className="hidden lg:flex absolute top-1/2 -right-3 -translate-y-1/2 items-center gap-2 px-3 py-1.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 text-white shadow-lg text-[11px] font-bold"
           style={{
-            transform: "translateZ(85px) rotate(3deg)",
+            transform: "translateZ(85px) rotate(2deg)",
             boxShadow: "0 12px 24px -4px rgba(217, 119, 6, 0.35)",
           }}
         >

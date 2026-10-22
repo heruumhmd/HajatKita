@@ -1,4 +1,3 @@
-@import url('https://fonts.googleapis.com/css2?family=Cinzel:wght@500;600;700;800&family=Playfair+Display:ital,wght@0,500;0,600;0,700;0,800;1,400;1,600&family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400;1,600&family=JetBrains+Mono:wght@400;500;600;700&display=swap');
 @import "sweetalert2/dist/sweetalert2.min.css";
 
 @tailwind base;
@@ -43,7 +42,7 @@ html,
 body {
   color: var(--foreground);
   background: var(--background);
-  font-family: 'Plus Jakarta Sans', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-family: var(--font-sans), -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   overflow-x: hidden;
@@ -51,15 +50,15 @@ body {
 }
 
 h1, h2, h3, .font-serif {
-  font-family: 'Playfair Display', Georgia, serif;
+  font-family: var(--font-serif), Georgia, serif;
 }
 
 .font-display {
-  font-family: 'Cinzel', 'Playfair Display', serif;
+  font-family: var(--font-serif), Georgia, serif;
 }
 
 .font-mono {
-  font-family: 'JetBrains Mono', monospace;
+  font-family: var(--font-mono), monospace;
 }
 
 /* Custom Scrollbar */
@@ -134,40 +133,35 @@ h1, h2, h3, .font-serif {
   line-height: 1.6 !important;
 }
 
-/* ===== 3D Claymorphic & Animation Enhancements ===== */
-
-/* Claymorphic Button Style */
-.clay-btn {
-  background: linear-gradient(145deg, #f0f4ff, #dce4f5);
-  box-shadow: inset 2px 2px 5px rgba(255,255,255,0.9),
-              inset -2px -2px 5px rgba(29,80,162,0.08),
-              5px 5px 15px rgba(29,80,162,0.12);
-  border: 1px solid rgba(255,255,255,0.6);
-  border-radius: 1rem;
-  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
+/* iOS Safe Area Utilities */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 1rem);
+}
+.pt-safe {
+  padding-top: env(safe-area-inset-top, 1rem);
 }
 
-.clay-btn:hover {
-  box-shadow: inset 1px 1px 3px rgba(255,255,255,0.7),
-              inset -1px -1px 3px rgba(29,80,162,0.06),
-              3px 3px 10px rgba(29,80,162,0.15);
-  transform: translateY(-1px);
+/* Modern Spatial 3D & Elevation */
+.perspective-1000 {
+  perspective: 1000px;
+}
+.perspective-600 {
+  perspective: 600px;
+}
+.preserve-3d {
+  transform-style: preserve-3d;
+}
+.backface-hidden {
+  backface-visibility: hidden;
 }
 
-.clay-btn:active {
-  transform: translateY(0.5px);
-  box-shadow: inset 3px 3px 6px rgba(29,80,162,0.12),
-              inset -1px -1px 2px rgba(255,255,255,0.5);
-}
-
-/* Claymorphic Card */
-.clay-card {
-  background: linear-gradient(145deg, #ffffff, #f0f4ff);
-  box-shadow: 6px 6px 20px rgba(29,80,162,0.10),
-              -4px -4px 12px rgba(255,255,255,0.9),
-              inset 1px 1px 2px rgba(255,255,255,0.8);
-  border: 1px solid rgba(255,255,255,0.7);
-  border-radius: 1.25rem;
+/* Subtle Modern Glass Surface */
+.surface-modern {
+  background: rgba(255, 255, 255, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(226, 232, 240, 0.8);
+  box-shadow: 0 1px 3px 0 rgba(15, 23, 42, 0.05), 0 10px 25px -5px rgba(15, 23, 42, 0.03);
 }
 
 /* 3D Card Hover Effect */
@@ -190,42 +184,16 @@ h1, h2, h3, .font-serif {
 /* 3D Logo Badge */
 .logo-3d {
   background: linear-gradient(135deg, #e8eeff 0%, #c4d4f7 50%, #a8bfef 100%);
-  box-shadow: inset 2px 2px 4px rgba(255,255,255,0.9),
-              inset -1px -1px 3px rgba(29,80,162,0.15),
-              4px 4px 12px rgba(29,80,162,0.20),
-              -2px -2px 6px rgba(255,255,255,0.7);
+  box-shadow: inset 1px 1px 2px rgba(255,255,255,0.9),
+              0 4px 12px rgba(29,80,162,0.12);
   border: 1px solid rgba(255,255,255,0.6);
-  transition: all 0.35s cubic-bezier(0.23, 1, 0.32, 1);
+  transition: all 0.3s cubic-bezier(0.23, 1, 0.32, 1);
 }
 
 .logo-3d:hover {
-  transform: scale(1.08) rotate(3deg);
-  box-shadow: inset 2px 2px 4px rgba(255,255,255,0.8),
-              inset -1px -1px 3px rgba(29,80,162,0.12),
-              6px 6px 18px rgba(29,80,162,0.25),
-              -3px -3px 8px rgba(255,255,255,0.6);
-}
-
-/* Floating 3D Animation */
-@keyframes float-3d {
-  0%, 100% { transform: translateY(0) rotateX(0) rotateZ(0); }
-  25% { transform: translateY(-4px) rotateX(2deg) rotateZ(1deg); }
-  50% { transform: translateY(-6px) rotateX(0deg) rotateZ(0deg); }
-  75% { transform: translateY(-3px) rotateX(-1deg) rotateZ(-0.5deg); }
-}
-
-.animate-float-3d {
-  animation: float-3d 4s ease-in-out infinite;
-}
-
-/* Pulsing Glow Effect */
-@keyframes pulse-glow {
-  0%, 100% { box-shadow: 0 0 8px rgba(29,80,162,0.15), 0 0 20px rgba(29,80,162,0.05); }
-  50% { box-shadow: 0 0 16px rgba(29,80,162,0.25), 0 0 32px rgba(29,80,162,0.10); }
-}
-
-.animate-pulse-glow {
-  animation: pulse-glow 3s ease-in-out infinite;
+  transform: scale(1.05);
+  box-shadow: inset 1px 1px 2px rgba(255,255,255,0.9),
+              0 6px 16px rgba(29,80,162,0.18);
 }
 
 /* 3D Embossed Badge */
@@ -253,4 +221,14 @@ h1, h2, h3, .font-serif {
   z-index: 1;
   margin-left: -8px;
   transform: translateZ(0px);
+}
+
+/* Motion Reduction Guard */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

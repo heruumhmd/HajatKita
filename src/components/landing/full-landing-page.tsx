@@ -177,23 +177,24 @@ export function FullLandingPage({
           </nav>
 
           {/* Right Action Buttons */}
-          <div className="flex items-center gap-2 sm:gap-3">
+          <div className="flex items-center gap-1.5 sm:gap-3 shrink-0">
             <button
               type="button"
               onClick={onEnterWorkspace}
-              className="inline-flex items-center gap-1.5 px-3.5 sm:px-4 py-2 sm:py-2.5 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs sm:text-sm shadow-subtle-sm transition-all hover:border-pastel-400"
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-4 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 font-bold text-xs sm:text-sm shadow-subtle-sm transition-all hover:border-pastel-400"
             >
-              <LayoutDashboard className="w-4 h-4 text-pastel-600" />
-              <span>Lihat Fitur &amp; Demo</span>
+              <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-pastel-600" />
+              <span className="hidden sm:inline">Lihat Fitur &amp; Demo</span>
+              <span className="sm:hidden">Demo</span>
             </button>
 
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="inline-flex items-center gap-1.5 px-4 sm:px-5 py-2 sm:py-2.5 rounded-2xl bg-gradient-to-r from-pastel-600 to-pastel-700 hover:from-pastel-700 hover:to-pastel-800 text-white font-bold text-xs sm:text-sm shadow-md shadow-pastel-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="inline-flex items-center gap-1 sm:gap-1.5 px-3 sm:px-5 py-1.5 sm:py-2.5 rounded-xl sm:rounded-2xl bg-gradient-to-r from-pastel-600 to-pastel-700 hover:from-pastel-700 hover:to-pastel-800 text-white font-bold text-xs sm:text-sm shadow-md shadow-pastel-500/25 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
               <LogIn className="w-3.5 h-3.5 sm:w-4 sm:h-4" />
-              <span>Masuk Akun</span>
+              <span>Masuk</span>
             </button>
           </div>
         </div>
@@ -201,17 +202,17 @@ export function FullLandingPage({
 
       {/* 2. Hero Section */}
       <main className="flex-1">
-        <section className="relative pt-10 sm:pt-16 pb-6 px-4 text-center max-w-5xl mx-auto space-y-6">
+        <section className="relative pt-8 sm:pt-16 pb-6 px-4 text-center max-w-5xl mx-auto space-y-5 sm:space-y-6">
           {/* Top Pill */}
-          <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-amber-50 via-white to-pastel-50 border border-amber-200/90 shadow-2xs">
-            <Sparkles className="w-4 h-4 text-amber-600 animate-spin-slow" />
-            <span className="text-xs font-black uppercase tracking-wider text-slate-800 font-serif">
-              Platform Wedding Planner Kolaboratif No. 1 di Indonesia
+          <div className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full bg-gradient-to-r from-amber-50 via-white to-pastel-50 border border-amber-200/90 shadow-2xs max-w-full">
+            <Sparkles className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+            <span className="text-[11px] sm:text-xs font-bold uppercase tracking-wider text-slate-800 font-serif truncate">
+              Platform Perencanaan Pernikahan Kolaboratif Indonesia
             </span>
           </div>
 
           {/* Hero Headline */}
-          <h1 className="text-3xl sm:text-5xl md:text-6xl font-black text-slate-900 font-serif tracking-tight leading-[1.12] max-w-4xl mx-auto">
+          <h1 className="text-2xl xs:text-3xl sm:text-5xl md:text-6xl font-black text-slate-900 font-serif tracking-tight leading-[1.15] max-w-4xl mx-auto">
             Biar Hari-H Terarah, Hidup Berdua Pasca-Nikah Tetap{" "}
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-pastel-600 via-pastel-500 to-amber-600">
               Tenang &amp; Berkah.
@@ -219,31 +220,30 @@ export function FullLandingPage({
           </h1>
 
           {/* Hero Subtitle */}
-          <p className="text-sm sm:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-sans">
-            Bukan sekadar spreadsheet biasa. HajatKita menghubungkan dua insan, dua keluarga besar, dan
-            tabungan bersama dengan proteksi finansial 70/30, ceklis KUA lengkap, dan sinkronisasi cloud
-            real-time.
+          <p className="text-xs sm:text-base md:text-lg text-slate-600 max-w-2xl mx-auto leading-relaxed font-sans">
+            Menghubungkan dua insan, dua keluarga besar, dan tabungan bersama dengan proteksi finansial 70/30,
+            ceklis KUA resmi, dan sinkronisasi cloud real-time.
           </p>
 
           {/* Primary Action Group */}
-          <div className="flex flex-col sm:flex-row items-center justify-center gap-3.5 pt-2">
+          <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2 w-full max-w-md mx-auto sm:max-w-none">
             <button
               type="button"
               onClick={onOpenAuthModal}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2.5 px-7 py-4 rounded-2xl bg-gradient-to-r from-pastel-600 to-pastel-700 hover:from-pastel-700 hover:to-pastel-800 text-white font-black text-sm sm:text-base shadow-lg shadow-pastel-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-7 py-3 sm:py-4 rounded-2xl bg-gradient-to-r from-pastel-600 to-pastel-700 hover:from-pastel-700 hover:to-pastel-800 text-white font-black text-xs sm:text-base shadow-lg shadow-pastel-500/30 transition-all hover:scale-[1.02] active:scale-[0.98]"
             >
-              <LogIn className="w-5 h-5" />
-              <span>Mulai Rencana Berdua (Gratis)</span>
-              <ArrowRight className="w-5 h-5" />
+              <LogIn className="w-4 h-4 sm:w-5 sm:h-5" />
+              <span>Mulai Rencana Berdua</span>
+              <ArrowRight className="w-4 h-4 sm:w-5 sm:h-5" />
             </button>
 
             <button
               type="button"
               onClick={onEnterWorkspace}
-              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-6 py-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 hover:border-pastel-400 text-slate-800 font-bold text-sm sm:text-base shadow-subtle-sm transition-all"
+              className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 sm:px-6 py-3 sm:py-4 rounded-2xl bg-white hover:bg-slate-50 border border-slate-300 hover:border-pastel-400 text-slate-800 font-bold text-xs sm:text-base shadow-subtle-sm transition-all"
             >
-              <Compass className="w-5 h-5 text-pastel-600" />
-              <span>Lihat Seluruh Fitur (Buka Workspace)</span>
+              <Compass className="w-4 h-4 sm:w-5 sm:h-5 text-pastel-600" />
+              <span>Buka Demo Workspace</span>
             </button>
           </div>
 

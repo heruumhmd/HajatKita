@@ -133,21 +133,21 @@ export function AppSidebar({
       {/* Mobile Drawer Backdrop */}
       {isMobileOpen && (
         <div
-          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs md:hidden"
+          className="fixed inset-0 z-50 bg-slate-900/50 backdrop-blur-xs lg:hidden"
           onClick={onClose}
         />
       )}
 
-      {/* Sidebar Container: Fixed on Desktop, Drawer on Mobile */}
+      {/* Sidebar Container: Fixed on Desktop (lg:+), Drawer on Mobile/Tablet (< lg) */}
       <aside
-        className={`fixed top-0 bottom-0 left-0 z-50 w-72 max-w-[85vw] bg-white border-r border-slate-200/80 flex flex-col transition-transform duration-300 ease-in-out md:translate-x-0 ${
+        className={`fixed top-0 bottom-0 left-0 z-50 w-72 max-w-[85vw] bg-white border-r border-slate-200/80 flex flex-col transition-transform duration-300 ease-in-out lg:translate-x-0 ${
           isMobileOpen ? "translate-x-0 shadow-2xl" : "-translate-x-full"
         }`}
       >
         {/* Brand Header */}
         <div className="p-5 border-b border-slate-100 flex items-center justify-between">
-          <Link href="/" className="flex items-center gap-2.5" onClick={onClose}>
-            <div className="w-10 h-10 rounded-xl logo-3d flex items-center justify-center animate-float-3d">
+          <Link href="/" className="flex items-center gap-2.5 group" onClick={onClose}>
+            <div className="w-10 h-10 rounded-xl logo-3d flex items-center justify-center hover:scale-105 transition-transform duration-200">
               <span className="text-lg filter drop-shadow-sm">💍</span>
             </div>
             <div>
@@ -162,7 +162,7 @@ export function AppSidebar({
 
           <button
             type="button"
-            className="md:hidden p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
+            className="lg:hidden p-1.5 rounded-xl text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
             onClick={onClose}
             aria-label="Tutup Menu"
           >
@@ -281,12 +281,12 @@ export function AppSidebar({
         </div>
       </aside>
 
-      {/* Mobile Bottom Quick-Access Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center justify-around py-1.5 px-2 shadow-lg">
+      {/* Mobile/Tablet Bottom Quick-Access Bar (< lg) */}
+      <nav className="lg:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-slate-200 flex items-center justify-around py-1.5 px-2 pb-safe shadow-lg">
         <Link
           href="/"
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-[10px] font-medium ${
-            pathname === "/" ? "text-pastel-600 font-bold" : "text-slate-500"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+            pathname === "/" ? "text-pastel-600 font-bold" : "text-slate-500 hover:text-slate-900"
           }`}
         >
           <LayoutDashboard className="w-4 h-4 mb-0.5" />
@@ -294,8 +294,8 @@ export function AppSidebar({
         </Link>
         <Link
           href="/budget"
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-[10px] font-medium ${
-            pathname === "/budget" ? "text-pastel-600 font-bold" : "text-slate-500"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+            pathname === "/budget" ? "text-pastel-600 font-bold" : "text-slate-500 hover:text-slate-900"
           }`}
         >
           <Wallet className="w-4 h-4 mb-0.5" />
@@ -303,8 +303,8 @@ export function AppSidebar({
         </Link>
         <Link
           href="/seserahan"
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-[10px] font-medium ${
-            pathname === "/seserahan" ? "text-pastel-600 font-bold" : "text-slate-500"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+            pathname === "/seserahan" ? "text-pastel-600 font-bold" : "text-slate-500 hover:text-slate-900"
           }`}
         >
           <Gift className="w-4 h-4 mb-0.5" />
@@ -312,8 +312,8 @@ export function AppSidebar({
         </Link>
         <Link
           href="/timeline"
-          className={`flex flex-col items-center py-1 px-3 rounded-lg text-[10px] font-medium ${
-            pathname === "/timeline" ? "text-pastel-600 font-bold" : "text-slate-500"
+          className={`flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-2.5 rounded-xl text-[10px] font-medium transition-colors ${
+            pathname === "/timeline" ? "text-pastel-600 font-bold" : "text-slate-500 hover:text-slate-900"
           }`}
         >
           <MapPin className="w-4 h-4 mb-0.5" />
@@ -322,7 +322,8 @@ export function AppSidebar({
         <button
           type="button"
           onClick={onOpenMobileMenu}
-          className="flex flex-col items-center py-1 px-3 rounded-lg text-[10px] font-medium text-slate-500 hover:text-slate-900"
+          className="flex flex-col items-center justify-center min-h-[44px] min-w-[48px] py-1 px-2.5 rounded-xl text-[10px] font-medium text-slate-500 hover:text-slate-900 transition-colors"
+          aria-label="Buka Menu Lengkap"
         >
           <Menu className="w-4 h-4 mb-0.5" />
           <span>Menu</span>

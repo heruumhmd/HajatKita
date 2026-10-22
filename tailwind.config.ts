@@ -85,10 +85,10 @@ const config: Config = {
         sm: "calc(var(--radius) - 4px)",
       },
       fontFamily: {
-        sans: ["'Plus Jakarta Sans'", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
-        serif: ["'Playfair Display'", "Georgia", "serif"],
-        display: ["'Cinzel'", "'Playfair Display'", "serif"],
-        mono: ["'JetBrains Mono'", "monospace"],
+        sans: ["var(--font-sans)", "-apple-system", "BlinkMacSystemFont", "sans-serif"],
+        serif: ["var(--font-serif)", "Georgia", "serif"],
+        display: ["var(--font-serif)", "Georgia", "serif"],
+        mono: ["var(--font-mono)", "monospace"],
       },
       boxShadow: {
         "subtle-sm": "0 1px 3px 0 rgba(15, 23, 42, 0.04), 0 1px 2px -1px rgba(15, 23, 42, 0.04)",
