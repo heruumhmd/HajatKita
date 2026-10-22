@@ -95,7 +95,7 @@ export function ThreeDScrollShowcase() {
       ref={containerRef}
       onMouseMove={handleMouseMove}
       onMouseLeave={handleMouseLeave}
-      className="relative w-full max-w-5xl mx-auto py-8 sm:py-12 px-2 sm:px-4 select-none"
+      className="relative w-full max-w-5xl mx-auto py-8 sm:py-12 px-2 sm:px-4 select-none overflow-x-clip"
       style={{ perspective: "1200px" }}
     >
       {/* Background Spatial Glow Orbs */}

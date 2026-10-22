@@ -47,11 +47,12 @@ export async function findWeddingForEmail(email: string | null | undefined): Pro
     return primaryRows[0];
   }
 
-  // 3. Search weddings where partner_user_email = cleanEmail OR partner_email = cleanEmail
+  // 3. Search weddings where partner_user_email = cleanEmail OR partner_email = cleanEmail (only if actively connected!)
   const partnerRows = await sql`
     SELECT * FROM weddings
-    WHERE LOWER(partner_user_email) = ${cleanEmail}
-       OR LOWER(partner_email) = ${cleanEmail}
+    WHERE (LOWER(partner_user_email) = ${cleanEmail}
+       OR LOWER(partner_email) = ${cleanEmail})
+      AND is_partner_connected = TRUE
     ORDER BY updated_at DESC LIMIT 1
   `;
 

@@ -82,6 +82,11 @@ export async function POST(req: NextRequest) {
     await sql`
       UPDATE weddings SET
         is_partner_connected = FALSE,
+        partner_name = NULL,
+        partner_email = NULL,
+        partner_user_email = NULL,
+        partner_role = NULL,
+        partner_avatar_card_id = NULL,
         updated_at = NOW()
       WHERE id = ${targetWedding.id}::uuid
     `;

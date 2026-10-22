@@ -44,6 +44,13 @@ const unpairResult = runApiSuite(
 );
 if (!unpairResult.ok) console.log(unpairResult.output);
 
+// 4. Partner Pair Authorization, Rate Limiting & Validation Tests
+const pairResult = runApiSuite(
+  "Partner Pair Authorization, Rate Limiting & Validation",
+  "npx tsx --test tests/api/pair.test.mjs"
+);
+if (!pairResult.ok) console.log(pairResult.output);
+
 // Database Integration Status
 if (!process.env.DATABASE_URL || !process.env.DATABASE_URL.toLowerCase().includes("test")) {
   console.log("\n[INFO] Live DB Integration Tests against external Neon PostgreSQL:");

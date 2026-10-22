@@ -33,6 +33,7 @@ export function ProfileModal() {
   const [role, setRole] = useState<"GROOM" | "BRIDE">("GROOM");
   const [avatarCardId, setAvatarCardId] = useState<string>("cat-prince");
   const [savedSuccess, setSavedSuccess] = useState(false);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   useEffect(() => {
     if (currentUser) {
@@ -66,8 +67,6 @@ export function ProfileModal() {
       setIsProfileModalOpen(false);
     }, 1200);
   };
-
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
 
   const handleLogout = async () => {
     const isConfirmed = await showConfirmDialog({

@@ -102,19 +102,24 @@ function AccountPageContent() {
       (currentUser?.role && raw?.role && currentUser.role === raw.role);
 
     if (!raw || isSelf) {
+      const isOwner = myEmail && wedding.primaryUserEmail && myEmail === wedding.primaryUserEmail.toLowerCase().trim();
+      const partnerEmail = isOwner
+        ? (wedding.partnerUserEmail || "")
+        : (wedding.primaryUserEmail || "");
+
       if (currentUser?.role === "GROOM") {
         return {
-          name: wedding.brideName || "Calon Istri",
+          name: wedding.brideName || raw?.name || "Calon Istri",
           role: "BRIDE" as const,
-          email: wedding.primaryUserEmail || "",
-          avatarCardId: "duck-bride",
+          email: partnerEmail,
+          avatarCardId: raw?.avatarCardId || "duck-bride",
         };
       } else {
         return {
-          name: wedding.groomName || "Calon Suami",
+          name: wedding.groomName || raw?.name || "Calon Suami",
           role: "GROOM" as const,
-          email: wedding.partnerUserEmail || "",
-          avatarCardId: "penguin-groom",
+          email: partnerEmail,
+          avatarCardId: raw?.avatarCardId || "penguin-groom",
         };
       }
     }
@@ -602,11 +607,13 @@ function AccountPageContent() {
 
         {/* Input Pair with another code */}
         <form onSubmit={handlePairing} className="pt-2 space-y-2">
-          <label className="block text-xs font-bold text-slate-700">
+          <label htmlFor="partner-code-input" className="block text-xs font-bold text-slate-700">
             Punya Kode Undangan dari Pasangan?
           </label>
           <div className="flex flex-col sm:flex-row gap-2">
             <input
+              id="partner-code-input"
+              aria-label="Kode Undangan Pasangan"
               type="text"
               placeholder="Contoh: HAJAT-89X2KP"
               value={partnerCodeInput}
@@ -685,7 +692,7 @@ function AccountPageContent() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-slate-700">
+                <label htmlFor="account-groom-name" className="text-xs font-bold text-slate-700">
                   Nama Lengkap Calon Suami *
                 </label>
                 {currentUser?.role === "GROOM" && (
@@ -701,6 +708,8 @@ function AccountPageContent() {
                 )}
               </div>
               <input
+                id="account-groom-name"
+                aria-label="Nama Lengkap Calon Suami"
                 type="text"
                 required
                 value={groomName}
@@ -712,7 +721,7 @@ function AccountPageContent() {
 
             <div>
               <div className="flex items-center justify-between mb-1">
-                <label className="text-xs font-bold text-slate-700">
+                <label htmlFor="account-bride-name" className="text-xs font-bold text-slate-700">
                   Nama Lengkap Calon Istri *
                 </label>
                 {currentUser?.role === "BRIDE" && (
@@ -728,6 +737,8 @@ function AccountPageContent() {
                 )}
               </div>
               <input
+                id="account-bride-name"
+                aria-label="Nama Lengkap Calon Istri"
                 type="text"
                 required
                 value={brideName}
@@ -740,10 +751,12 @@ function AccountPageContent() {
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="account-wedding-date" className="block text-xs font-bold text-slate-700 mb-1">
                 Tanggal Akad / Resepsi *
               </label>
               <input
+                id="account-wedding-date"
+                aria-label="Tanggal Akad atau Resepsi"
                 type="date"
                 required
                 value={weddingDate}
@@ -753,10 +766,12 @@ function AccountPageContent() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="account-city" className="block text-xs font-bold text-slate-700 mb-1">
                 Kota / Lokasi Acara *
               </label>
               <input
+                id="account-city"
+                aria-label="Kota atau Lokasi Acara"
                 type="text"
                 required
                 value={city}
@@ -767,10 +782,12 @@ function AccountPageContent() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="account-target-budget" className="block text-xs font-bold text-slate-700 mb-1">
                 Target Anggaran Total (Rp) *
               </label>
               <input
+                id="account-target-budget"
+                aria-label="Target Anggaran Total"
                 type="number"
                 required
                 value={targetBudget}
@@ -783,10 +800,12 @@ function AccountPageContent() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="account-venue-name" className="block text-xs font-bold text-slate-700 mb-1">
                 Nama Gedung / Tempat Acara
               </label>
               <input
+                id="account-venue-name"
+                aria-label="Nama Gedung atau Tempat Acara"
                 type="text"
                 value={venueName}
                 onChange={(e) => setVenueName(e.target.value)}
@@ -796,7 +815,7 @@ function AccountPageContent() {
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">
+              <label htmlFor="account-slug" className="block text-xs font-bold text-slate-700 mb-1">
                 Slug Tautan Dinamis Publik *
               </label>
               <div className="flex flex-col sm:flex-row items-stretch">
@@ -804,6 +823,8 @@ function AccountPageContent() {
                   /invitation/
                 </span>
                 <input
+                  id="account-slug"
+                  aria-label="Slug Tautan Dinamis Publik"
                   type="text"
                   required
                   value={slug}

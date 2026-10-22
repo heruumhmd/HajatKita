@@ -173,7 +173,7 @@ export function ActivityFeed() {
           activityLogs.slice(0, 5).map((log) => {
             const detected = autoDetectTypeAndModule(log.action);
             const actionType = log.actionType || detected.actionType;
-            const module = log.module || detected.module;
+            const activityModule = log.module || detected.module;
             const relativeTime = formatRelativeTime(log.timestamp || log.createdAt, log.timeAgo || "Baru saja");
             const exactTime = formatExactDateTime(log.timestamp || log.createdAt);
 
@@ -183,7 +183,7 @@ export function ActivityFeed() {
                 className="flex items-start gap-3 p-3 rounded-2xl bg-slate-50/70 hover:bg-slate-100/60 transition-colors border border-slate-100"
               >
                 <div className="w-7 h-7 rounded-lg bg-white border border-slate-200 flex items-center justify-center shrink-0 shadow-2xs mt-0.5">
-                  {getActionIcon(module, log.action)}
+                  {getActionIcon(activityModule, log.action)}
                 </div>
 
                 <div className="flex-1 min-w-0">

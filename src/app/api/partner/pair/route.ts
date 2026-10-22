@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { sql } from "@/db";
 import { auth } from "@/auth";
 import { findWeddingForEmail } from "@/db/find-wedding";
-import { verifyWorkspaceToken } from "@/lib/auth-token";
+import { verifyWorkspaceToken, createWorkspaceToken } from "@/lib/auth-token";
 
 // In-memory rate limiting against invite code brute-forcing (5 attempts per minute per IP)
 const pairRateLimitMap = new Map<string, { count: number; resetTime: number }>();
@@ -105,6 +105,76 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Check if the user is already actively connected to this workspace
+    const existingPartnerEmail = (targetWedding.partner_user_email || targetWedding.partner_email || "").toLowerCase().trim();
+    if (targetWedding.is_partner_connected && existingPartnerEmail && existingPartnerEmail === cleanUserEmail) {
+      const u1Email = (targetWedding.primary_user_email || targetOwnerEmail || "").toLowerCase().trim();
+      let u1Row = null;
+      let u2Row = null;
+      if (u1Email) {
+        const r1 = await sql`SELECT * FROM users WHERE LOWER(email) = ${u1Email} LIMIT 1`;
+        if (r1 && r1.length > 0) u1Row = r1[0];
+      }
+      if (cleanUserEmail) {
+        const r2 = await sql`SELECT * FROM users WHERE LOWER(email) = ${cleanUserEmail} LIMIT 1`;
+        if (r2 && r2.length > 0) u2Row = r2[0];
+      }
+      const ownerRole = u1Row?.role || "GROOM";
+      const partnerDisplayName = u1Row?.name || targetWedding.groom_name || targetWedding.bride_name || "Pasangan Anda";
+      const user1Info = {
+        name: u1Row?.name || (ownerRole === "GROOM" ? targetWedding.groom_name : targetWedding.bride_name) || "Pasangan",
+        role: ownerRole as "GROOM" | "BRIDE",
+        email: u1Email,
+        avatarCardId: u1Row?.avatar_card_id || (ownerRole === "GROOM" ? "penguin-groom" : "duck-bride"),
+      };
+      const user2Info = {
+        name: u2Row?.name || targetWedding.partner_name || "Saya",
+        role: (u2Row?.role || targetWedding.partner_role || "BRIDE") as "GROOM" | "BRIDE",
+        email: cleanUserEmail,
+        avatarCardId: u2Row?.avatar_card_id || targetWedding.partner_avatar_card_id || "cat-princess",
+      };
+
+      let parsedPlanData = null;
+      if (targetWedding.plan_data) {
+        try { parsedPlanData = JSON.parse(targetWedding.plan_data); } catch {}
+      }
+
+      return NextResponse.json({
+        success: true,
+        message: `Anda sudah terhubung dengan ${partnerDisplayName} di workspace pernikahan ini.`,
+        isRestoredFromSamePartner: false,
+        wedding: {
+          id: targetWedding.id,
+          title: targetWedding.title || "Pernikahan Kita",
+          groomName: targetWedding.groom_name || "",
+          brideName: targetWedding.bride_name || "",
+          weddingDate: targetWedding.wedding_date || "",
+          city: targetWedding.city || "",
+          targetBudget: parseFloat(targetWedding.target_budget || "0"),
+          currentSavings: parseFloat(targetWedding.current_savings || "0"),
+          inviteCode: targetWedding.invite_code,
+          slug: targetWedding.slug || "",
+          venueName: targetWedding.venue_name || "",
+          venueAddress: targetWedding.venue_address || "",
+          maharDetails: targetWedding.mahar_details || "",
+          waliNikah: targetWedding.wali_nikah || "",
+          penghulu: targetWedding.penghulu || "",
+          saksiNikah: targetWedding.saksi_nikah || "",
+          isPartnerConnected: true,
+          primaryUserEmail: u1Email,
+          partnerUserEmail: cleanUserEmail,
+          version: typeof targetWedding.version === "number" ? targetWedding.version : 0,
+          partnerInfo: user1Info,
+          couple: {
+            user1: user1Info,
+            user2: user2Info,
+          },
+        },
+        planData: parsedPlanData,
+        token: createWorkspaceToken(cleanUserEmail, targetWedding.id),
+      });
+    }
+
     // Check if the current user is already actively paired with another workspace
     const userActiveWedding = await findWeddingForEmail(cleanUserEmail);
     if (userActiveWedding && userActiveWedding.is_partner_connected && userActiveWedding.id !== targetWedding.id) {
@@ -115,7 +185,6 @@ export async function POST(req: NextRequest) {
     }
 
     // Prevent partner hijacking: check if the target workspace already has another active partner
-    const existingPartnerEmail = (targetWedding.partner_user_email || targetWedding.partner_email || "").toLowerCase().trim();
     if (targetWedding.is_partner_connected && existingPartnerEmail && existingPartnerEmail !== cleanUserEmail) {
       return NextResponse.json(
         { success: false, message: "Workspace pernikahan ini sudah terhubung dengan pasangan lain. Harap minta pemilik membatalkan pasangan sebelumnya terlebih dahulu." },
@@ -147,6 +216,28 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Upsert joining user (User 2) into users table so profile details are persisted
+    const effectiveUser2Role = userRole || (targetWedding.groom_name ? "BRIDE" : "GROOM");
+    const effectiveUser2Avatar = userAvatarCardId || (effectiveUser2Role === "GROOM" ? "cat-prince" : "cat-princess");
+    const effectiveUser2Name = userName || (effectiveUser2Role === "GROOM" ? "Calon Suami" : "Calon Istri");
+
+    await sql`
+      INSERT INTO users (name, nickname, email, avatar_card_id, role, updated_at)
+      VALUES (
+        ${effectiveUser2Name},
+        ${effectiveUser2Name.split(" ")[0] || "Saya"},
+        ${cleanUserEmail},
+        ${effectiveUser2Avatar},
+        ${effectiveUser2Role},
+        NOW()
+      )
+      ON CONFLICT (email) DO UPDATE SET
+        name = COALESCE(EXCLUDED.name, users.name),
+        avatar_card_id = COALESCE(${userAvatarCardId || null}, users.avatar_card_id),
+        role = COALESCE(${userRole || null}, users.role),
+        updated_at = NOW();
+    `;
+
     let activeWeddingId: string;
     let chosenWeddingRow = null;
 
@@ -168,13 +259,13 @@ export async function POST(req: NextRequest) {
       await sql`
         UPDATE weddings SET
           is_partner_connected = TRUE,
-          partner_name = COALESCE(${userName}, partner_name),
+          partner_name = COALESCE(${effectiveUser2Name}, partner_name),
           partner_email = ${cleanUserEmail},
           partner_user_email = ${cleanUserEmail},
-          partner_role = ${userRole || "BRIDE"},
-          partner_avatar_card_id = ${userAvatarCardId || "cat-princess"},
-          groom_name = CASE WHEN ${userRole === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${userName} ELSE groom_name END,
-          bride_name = CASE WHEN ${userRole === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${userName} ELSE bride_name END,
+          partner_role = ${effectiveUser2Role},
+          partner_avatar_card_id = ${effectiveUser2Avatar},
+          groom_name = CASE WHEN ${effectiveUser2Role === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${effectiveUser2Name} ELSE groom_name END,
+          bride_name = CASE WHEN ${effectiveUser2Role === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${effectiveUser2Name} ELSE bride_name END,
           updated_at = NOW()
         WHERE id = ${activeWeddingId}::uuid
       `;
@@ -195,13 +286,14 @@ export async function POST(req: NextRequest) {
       await sql`
         UPDATE weddings SET
           is_partner_connected = TRUE,
-          partner_name = ${userName || "Pasangan"},
+          partner_name = ${effectiveUser2Name},
           partner_email = ${cleanUserEmail},
           partner_user_email = ${cleanUserEmail},
-          partner_role = ${userRole || (targetWedding.groom_name ? "BRIDE" : "GROOM")},
-          partner_avatar_card_id = ${userAvatarCardId || "cat-princess"},
-          groom_name = CASE WHEN ${userRole === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${userName} ELSE groom_name END,
-          bride_name = CASE WHEN ${userRole === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${userName} ELSE bride_name END,
+          partner_role = ${effectiveUser2Role},
+          partner_avatar_card_id = ${effectiveUser2Avatar},
+          primary_user_email = COALESCE(primary_user_email, ${targetOwnerEmail || null}),
+          groom_name = CASE WHEN ${effectiveUser2Role === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${effectiveUser2Name} ELSE groom_name END,
+          bride_name = CASE WHEN ${effectiveUser2Role === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${effectiveUser2Name} ELSE bride_name END,
           updated_at = NOW()
         WHERE id = ${activeWeddingId}::uuid
       `;
@@ -236,16 +328,41 @@ export async function POST(req: NextRequest) {
     }
 
     // Joining user is User 2, so their partner is User 1 (primary owner)
-    const ownerRole = user1Row?.role || (userRole === "BRIDE" ? "GROOM" : "BRIDE");
+    const ownerRole = user1Row?.role || (effectiveUser2Role === "BRIDE" ? "GROOM" : "BRIDE");
     const partnerDisplayName = user1Row?.name || (ownerRole === "GROOM" ? finalWedding.groom_name : finalWedding.bride_name) || "Pasangan Anda";
     const partnerRoleDisplay = ownerRole;
     const partnerAvatarDisplay = user1Row?.avatar_card_id || (ownerRole === "GROOM" ? "cat-prince" : "cat-princess");
     const partnerEmailDisplay = user1Email;
 
+    const user1Info = {
+      name: partnerDisplayName,
+      role: partnerRoleDisplay as "GROOM" | "BRIDE",
+      email: partnerEmailDisplay,
+      avatarCardId: partnerAvatarDisplay,
+    };
+
+    const user2Info = {
+      name: user2Row?.name || effectiveUser2Name,
+      role: effectiveUser2Role as "GROOM" | "BRIDE",
+      email: user2Email,
+      avatarCardId: effectiveUser2Avatar,
+    };
+
     const effectiveGroom = finalWedding.groom_name ||
-      (user1Row?.role === "GROOM" ? user1Row.name : (userRole === "GROOM" ? (userName || user2Row?.name) : ""));
+      (user1Row?.role === "GROOM" ? user1Row.name : (effectiveUser2Role === "GROOM" ? effectiveUser2Name : ""));
     const effectiveBride = finalWedding.bride_name ||
-      (user1Row?.role === "BRIDE" ? user1Row.name : (userRole === "BRIDE" ? (userName || user2Row?.name) : ""));
+      (user1Row?.role === "BRIDE" ? user1Row.name : (effectiveUser2Role === "BRIDE" ? effectiveUser2Name : ""));
+
+    // Ensure groom_name and bride_name in DB are populated if they were empty
+    if ((!finalWedding.groom_name && effectiveGroom) || (!finalWedding.bride_name && effectiveBride)) {
+      await sql`
+        UPDATE weddings SET
+          groom_name = COALESCE(NULLIF(groom_name, ''), ${effectiveGroom || null}),
+          bride_name = COALESCE(NULLIF(bride_name, ''), ${effectiveBride || null}),
+          updated_at = NOW()
+        WHERE id = ${activeWeddingId}::uuid
+      `;
+    }
 
     return NextResponse.json({
       success: true,
@@ -253,7 +370,7 @@ export async function POST(req: NextRequest) {
       isRestoredFromSamePartner: Boolean(historicalWedding),
       wedding: {
         id: finalWedding.id,
-        title: finalWedding.title,
+        title: finalWedding.title || "Pernikahan Kita",
         groomName: effectiveGroom,
         brideName: effectiveBride,
         weddingDate: finalWedding.wedding_date || "",
@@ -269,15 +386,17 @@ export async function POST(req: NextRequest) {
         penghulu: finalWedding.penghulu || "",
         saksiNikah: finalWedding.saksi_nikah || "",
         isPartnerConnected: true,
+        primaryUserEmail: user1Email,
+        partnerUserEmail: user2Email,
         version: typeof finalWedding.version === "number" ? finalWedding.version : 0,
-        partnerInfo: {
-          name: partnerDisplayName,
-          role: partnerRoleDisplay,
-          email: partnerEmailDisplay,
-          avatarCardId: partnerAvatarDisplay,
+        partnerInfo: user1Info,
+        couple: {
+          user1: user1Info,
+          user2: user2Info,
         },
       },
       planData: parsedPlanData,
+      token: createWorkspaceToken(cleanUserEmail, finalWedding.id),
     });
   } catch (error: any) {
     console.error("Error in POST /api/partner/pair:", error);

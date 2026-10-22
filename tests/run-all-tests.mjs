@@ -32,7 +32,7 @@ const unitPassed = runSuite("1. Unit Suite (Token, Merge, Validation)", "npx tsx
 const staticPassed = runSuite("2. Static Suite (TypeCheck, Secrets, Headers, Routes)", "npx tsx tests/static/run-static-checks.mjs");
 
 // 3. API Security & Authorization Tests
-const apiPassed = runSuite("3. API Suite (Auth Bypass, Logout CSRF, UUID Safety)", "npx tsx tests/api/run-api-tests.mjs");
+const apiPassed = runSuite("3. API Suite (Auth Bypass, Logout CSRF, UUID Safety, Partner Pairing)", "npx tsx tests/api/run-api-tests.mjs");
 
 // 4. E2E Tests (Playwright)
 const e2ePassed = runSuite("4. E2E Suite (Playwright Viewports & A11y)", "npx playwright test");

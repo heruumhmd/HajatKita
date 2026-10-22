@@ -296,7 +296,7 @@ const WeddingContext = createContext<WeddingContextType | null>(null);
 export function autoDetectTypeAndModule(action: string): { actionType: ActivityActionType; module: ActivityModule } {
   const lower = (action || "").toLowerCase();
   let actionType: ActivityActionType = "UPDATE";
-  let module: ActivityModule = "WEDDING";
+  let detectedModule: ActivityModule = "WEDDING";
 
   if (lower.startsWith("masuk") || lower.includes("berhasil masuk") || lower.includes("login")) {
     actionType = "LOGIN";
@@ -331,34 +331,34 @@ export function autoDetectTypeAndModule(action: string): { actionType: ActivityA
   }
 
   if (lower.includes("login") || lower.includes("logout") || lower.includes("sesi")) {
-    module = "AUTH";
+    detectedModule = "AUTH";
   } else if (lower.includes("profil") || lower.includes("avatar") || lower.includes("biodata")) {
-    module = "PROFILE";
+    detectedModule = "PROFILE";
   } else if (lower.includes("pasangan") || lower.includes("workspace") || lower.includes("kode undangan")) {
-    module = "WORKSPACE";
+    detectedModule = "WORKSPACE";
   } else if (lower.includes("tabungan") || lower.includes("setoran")) {
-    module = "SAVINGS";
+    detectedModule = "SAVINGS";
   } else if (lower.includes("pos anggaran") || lower.includes("budget") || lower.includes("anggaran")) {
-    module = "BUDGET";
+    detectedModule = "BUDGET";
   } else if (lower.includes("tugas") || lower.includes("checklist")) {
-    module = "CHECKLIST";
+    detectedModule = "CHECKLIST";
   } else if (lower.includes("seserahan") || lower.includes("kotak")) {
-    module = "SESERAHAN";
+    detectedModule = "SESERAHAN";
   } else if (lower.includes("wishlist") || lower.includes("kado") || lower.includes("pasca-nikah")) {
-    module = "POST_WEDDING";
+    detectedModule = "POST_WEDDING";
   } else if (lower.includes("tamu") || lower.includes("rsvp") || lower.includes("amplop") || lower.includes("kuota")) {
-    module = "GUESTS";
+    detectedModule = "GUESTS";
   } else if (lower.includes("rundown") || lower.includes("agenda")) {
-    module = "RUNDOWN";
+    detectedModule = "RUNDOWN";
   } else if (lower.includes("vendor") || lower.includes("kontrak") || lower.includes("termin")) {
-    module = "VENDORS";
+    detectedModule = "VENDORS";
   } else if (lower.includes("kua") || lower.includes("berkas") || lower.includes("syarat") || lower.includes("administrasi")) {
-    module = "ADMINISTRATION";
+    detectedModule = "ADMINISTRATION";
   } else if (lower.includes("pranikah") || lower.includes("topik") || lower.includes("pandangan") || lower.includes("bicara")) {
-    module = "ALIGNMENT";
+    detectedModule = "ALIGNMENT";
   }
 
-  return { actionType, module };
+  return { actionType, module: detectedModule };
 }
 
 export function hashPayload(p: any): string {
@@ -447,6 +447,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const dirtyAfterFlightRef = useRef(false);
   const latestPayloadRef = useRef<any>(null);
   const isLoggingOutRef = useRef<boolean>(false);
+  const addActivityRef = useRef<((userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string, options?: any) => void) | null>(null);
 
   useEffect(() => {
     currentUserRef.current = currentUser;
@@ -523,7 +524,6 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     adminSteps,
     activityLogs,
     lifeGoals,
-    deletedItemIds,
   ]);
 
   // Keep latest payload ref always updated with latest state
@@ -556,7 +556,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     try {
       const activeUser = currentUserRef.current;
       const activeEmail = (email || activeUser?.email || "").toLowerCase().trim();
-      const inviteCode = code || weddingRef.current.inviteCode || wedding.inviteCode;
+      const inviteCode = code || weddingRef.current.inviteCode;
       const query = activeEmail
         ? `email=${encodeURIComponent(activeEmail)}${inviteCode ? `&code=${encodeURIComponent(inviteCode)}` : ""}`
         : inviteCode
@@ -657,7 +657,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           const prevConnected = weddingRef.current.isPartnerConnected;
           const newConnected = Boolean(data.wedding.isPartnerConnected);
           if (!prevConnected && newConnected) {
-            addActivity(
+            addActivityRef.current?.(
               partnerInfo?.name || "Pasangan",
               partnerInfo?.role || "BRIDE",
               "Berhasil terhubung ke Duo Workspace! Rencana kini tersinkron."
@@ -1116,7 +1116,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   ]);
 
   // Explicit sync triggered on actions like copying invite code or link
-  const syncNow = async (): Promise<boolean> => {
+  const syncNow = useCallback(async (): Promise<boolean> => {
     try {
       const payload = buildPlanPayload();
       const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
@@ -1219,17 +1219,17 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       console.warn("Manual sync error", e);
       return false;
     }
-  };
+  }, [buildPlanPayload, currentUser, fetchDbData, wedding.inviteCode]);
 
   const refreshWorkspace = useCallback(async () => {
     if (currentUser?.email) {
-      await fetchDbData(currentUser.email);
+      await fetchDbData(currentUser.email, undefined, true);
     } else if (wedding.inviteCode && wedding.inviteCode !== "HAJAT-89X2") {
-      await fetchDbData(undefined, wedding.inviteCode);
+      await fetchDbData(undefined, wedding.inviteCode, true);
     } else {
       await syncNow();
     }
-  }, [currentUser?.email, wedding.inviteCode, fetchDbData]);
+  }, [currentUser?.email, wedding.inviteCode, fetchDbData, syncNow]);
 
   // Save auth user to localStorage
   useEffect(() => {
@@ -1448,9 +1448,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const pairWithPartner = async (inviteCode: string): Promise<{ success: boolean; message: string }> => {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["x-hajat-token"] = token;
+      }
+
       const res = await fetch("/api/partner/pair", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           inviteCode,
           userEmail: currentUser?.email,
@@ -1464,10 +1470,17 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         return { success: false, message: result.message || "Gagal menghubungkan pasangan" };
       }
 
+      if (result.token && typeof window !== "undefined") {
+        try {
+          localStorage.setItem("hajat_workspace_token", result.token);
+        } catch {}
+      }
+
       if (result.wedding) {
         if (typeof result.wedding.version === "number") {
           versionRef.current = result.wedding.version;
         }
+        weddingRef.current = result.wedding;
         setWedding(result.wedding);
       }
       if (result.planData) {
@@ -1542,9 +1555,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   const unpairPartner = async (): Promise<{ success: boolean; message: string }> => {
     try {
+      const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
+      const headers: Record<string, string> = { "Content-Type": "application/json" };
+      if (token) {
+        headers["x-hajat-token"] = token;
+      }
+
       const res = await fetch("/api/partner/unpair", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers,
         body: JSON.stringify({
           userEmail: currentUser?.email,
           weddingId: wedding.id,
@@ -1555,11 +1574,19 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         return { success: false, message: result.message || "Gagal membatalkan hubungan" };
       }
 
-      setWedding((prev) => ({
-        ...prev,
-        isPartnerConnected: false,
-        partnerInfo: undefined,
-      }));
+      setWedding((prev) => {
+        const next = {
+          ...prev,
+          isPartnerConnected: false,
+          partnerInfo: undefined,
+          partnerUserEmail: undefined,
+          partnerName: undefined,
+          partnerRole: undefined,
+          partnerAvatarCardId: undefined,
+        };
+        weddingRef.current = next;
+        return next;
+      });
 
       addActivity(
         currentUser?.name || "Pengguna",
@@ -1684,6 +1711,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     };
     setActivityLogs((prev) => [newLog, ...prev.slice(0, 299)]);
   };
+  addActivityRef.current = addActivity;
 
   // Actions
   const updateWedding = (data: Partial<WeddingProject>) => {

@@ -136,7 +136,7 @@ export function FullLandingPage({
   ];
 
   return (
-    <div className="min-h-screen bg-[#FBFBFA] text-slate-900 flex flex-col selection:bg-pastel-100 selection:text-pastel-900">
+    <div className="min-h-screen bg-[#FBFBFA] text-slate-900 flex flex-col selection:bg-pastel-100 selection:text-pastel-900 overflow-x-clip">
       {/* 1. Custom Standalone Top Navigation Header */}
       <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-slate-200/80 shadow-2xs">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 sm:h-20 flex items-center justify-between gap-4">
