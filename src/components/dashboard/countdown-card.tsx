@@ -48,7 +48,11 @@ export function CountdownCard() {
   }, [wedding.weddingDate]);
 
   const formattedDate = wedding.weddingDate
-    ? new Date(wedding.weddingDate).toLocaleDateString("id-ID", {
+    ? new Date(
+        wedding.weddingDate.includes("T")
+          ? wedding.weddingDate
+          : `${wedding.weddingDate}T00:00:00`
+      ).toLocaleDateString("id-ID", {
         weekday: "long",
         year: "numeric",
         month: "long",

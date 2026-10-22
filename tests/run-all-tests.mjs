@@ -26,7 +26,7 @@ function runSuite(name, cmd) {
 }
 
 // 1. Unit Tests (No DB needed)
-const unitPassed = runSuite("1. Unit Suite (Token, Merge, Validation)", "npx tsx --test tests/unit/token.test.mjs tests/unit/merge.test.mjs tests/unit/validation.test.mjs");
+const unitPassed = runSuite("1. Unit Suite (Token, Merge, Validation, Partner)", "npx tsx --test tests/unit/token.test.mjs tests/unit/merge.test.mjs tests/unit/validation.test.mjs tests/unit/partner.test.mjs");
 
 // 2. Static Code Quality & Security Tests
 const staticPassed = runSuite("2. Static Suite (TypeCheck, Secrets, Headers, Routes)", "npx tsx tests/static/run-static-checks.mjs");

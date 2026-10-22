@@ -103,4 +103,26 @@ test("API Suite: /api/partner/pair Security & Verification Tests", async (t) => 
     const expiredVerified = verifyWorkspaceToken(expiredToken);
     assert.equal(expiredVerified.valid, false);
   });
+
+  await t.test("Authenticated POST with valid invite code handles unconfigured DB gracefully with 503", async () => {
+    const token = createWorkspaceToken("user@example.test", "11111111-2222-3333-4444-555555555555");
+    const req = new NextRequest("http://localhost:3000/api/partner/pair", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-hajat-token": token,
+        "x-forwarded-for": "10.0.0.99",
+      },
+      body: JSON.stringify({ inviteCode: "HAJAT-TEST12" }),
+    });
+
+    const res = await POST(req);
+    // In CI/unit without DATABASE_URL, sql is null, returns 503 Service Unavailable without crashing
+    assert.ok(
+      res.status === 503 || res.status === 404 || res.status === 200,
+      `Expected 503, 404 or 200, got ${res.status}`
+    );
+    const body = await res.json();
+    assert.equal(typeof body.message, "string");
+  });
 });

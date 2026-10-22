@@ -660,7 +660,11 @@ export async function POST(req: NextRequest) {
           NOW()
         )
         ON CONFLICT (email) DO UPDATE SET
-          name = EXCLUDED.name,
+          name = CASE 
+            WHEN EXCLUDED.name IN ('Calon Suami', 'Calon Istri', 'Calon Pengantin', 'Saya') AND users.name IS NOT NULL AND users.name != '' AND users.name NOT IN ('Calon Suami', 'Calon Istri', 'Calon Pengantin', 'Saya')
+            THEN users.name
+            ELSE COALESCE(NULLIF(EXCLUDED.name, ''), users.name)
+          END,
           nickname = COALESCE(EXCLUDED.nickname, users.nickname),
           image = COALESCE(EXCLUDED.image, users.image),
           avatar_card_id = COALESCE(EXCLUDED.avatar_card_id, users.avatar_card_id),
@@ -767,11 +771,16 @@ export async function POST(req: NextRequest) {
 
       const clientBaseVersion = typeof body.baseVersion === "number" ? body.baseVersion : (typeof wedding?.version === "number" ? wedding.version : 0);
 
+      const effectiveGroomName = wedding?.groomName ||
+        (user?.role === "GROOM" ? user?.name : (resolvedPartnerRole === "GROOM" ? resolvedPartnerName : null));
+      const effectiveBrideName = wedding?.brideName ||
+        (user?.role === "BRIDE" ? user?.name : (resolvedPartnerRole === "BRIDE" ? resolvedPartnerName : null));
+
       const updateResult = await sql`
         UPDATE weddings SET
           title = ${wedding?.title !== undefined ? (wedding.title || "Pernikahan Kita") : (existingWedding.title || "Pernikahan Kita")},
-          groom_name = COALESCE(NULLIF(${wedding?.groomName || ""}, ''), groom_name),
-          bride_name = COALESCE(NULLIF(${wedding?.brideName || ""}, ''), bride_name),
+          groom_name = COALESCE(NULLIF(${wedding?.groomName || ""}, ''), NULLIF(${effectiveGroomName || ""}, ''), groom_name),
+          bride_name = COALESCE(NULLIF(${wedding?.brideName || ""}, ''), NULLIF(${effectiveBrideName || ""}, ''), bride_name),
           wedding_date = ${wedding?.weddingDate !== undefined ? validWeddingDate : existingWedding.wedding_date},
           city = ${wedding?.city !== undefined ? (wedding.city || null) : existingWedding.city},
           target_budget = ${wedding?.targetBudget !== undefined ? wedding.targetBudget : existingWedding.target_budget},
@@ -825,6 +834,15 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Guard against invite_code collision when inserting a fresh wedding
+      let finalInviteCode = inviteCode;
+      const existingCode = await sql`
+        SELECT id FROM weddings WHERE UPPER(invite_code) = ${finalInviteCode} LIMIT 1
+      `;
+      if (existingCode && existingCode.length > 0) {
+        finalInviteCode = "HAJAT-" + Math.random().toString(36).substring(2, 8).toUpperCase();
+      }
+
       const insertRows = await sql`
         INSERT INTO weddings (
           title, invite_code, groom_name, bride_name, wedding_date, city,
@@ -834,7 +852,7 @@ export async function POST(req: NextRequest) {
           partner_avatar_card_id, primary_user_email, plan_data, version, updated_at
         ) VALUES (
           ${wedding?.title || "Pernikahan Kita"},
-          ${inviteCode},
+          ${finalInviteCode},
           ${wedding?.groomName || ""},
           ${wedding?.brideName || ""},
           ${validWeddingDate},

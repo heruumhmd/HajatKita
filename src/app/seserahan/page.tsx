@@ -235,11 +235,11 @@ export default function SeserahanPage() {
       {/* Filter and Search Bar */}
       <div className="bg-white p-4 rounded-3xl border border-slate-200/90 shadow-subtle-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
         {/* Box Tabs */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none scroll-smooth p-0.5">
           <button
             type="button"
             onClick={() => setSelectedBox("ALL")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+            className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors flex items-center shrink-0 ${
               selectedBox === "ALL"
                 ? "bg-pastel-600 text-white shadow-xs"
                 : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -254,7 +254,7 @@ export default function SeserahanPage() {
                 key={boxNum}
                 type="button"
                 onClick={() => setSelectedBox(boxNum)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors flex items-center shrink-0 ${
                   selectedBox === boxNum
                     ? "bg-pastel-600 text-white shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -298,14 +298,18 @@ export default function SeserahanPage() {
             </button>
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 perspective-600">
           {filteredItems.map((item) => (
             <div
               key={item.id}
-              className={`bg-white rounded-3xl p-5 border transition-all shadow-subtle-sm flex flex-col justify-between ${
+              className={`relative rounded-3xl p-5 border preserve-3d flex flex-col justify-between overflow-hidden shadow-subtle-sm baki-acrylic ${
                 item.isPurchased
-                  ? "border-emerald-200 bg-emerald-50/10"
-                  : "border-slate-200/90 hover:border-pastel-300"
+                  ? "!border-emerald-300/80 !bg-gradient-to-br from-emerald-50/50 via-white to-emerald-50/30"
+                  : "!border-amber-200/80 !bg-gradient-to-br from-white/95 via-amber-50/20 to-amber-50/40 backdrop-blur-sm"
+              } before:absolute before:inset-x-0 before:top-0 before:h-1 before:bg-gradient-to-r ${
+                item.isPurchased
+                  ? "before:from-emerald-300 before:via-emerald-400 before:to-emerald-300"
+                  : "before:from-amber-300/80 before:via-amber-400 before:to-amber-300/80"
               }`}
             >
               <div>

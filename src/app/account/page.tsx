@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect, useMemo, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
 import { useSearchParams, useRouter } from "next/navigation";
+import { getEffectivePartner } from "@/lib/partner-helper";
 import {
   User,
   Heart,
@@ -87,53 +88,12 @@ function AccountPageContent() {
   );
   const [slug, setSlug] = useState(wedding.slug || "");
 
-  // Reciprocal partner resolution:
+  // Reciprocal partner resolution using centralized helper
   const effectivePartner = useMemo(() => {
-    if (!wedding.isPartnerConnected) return null;
-    const raw = wedding.partnerInfo;
-    const myEmail = (currentUser?.email || "").toLowerCase().trim();
-    const myName = (currentUser?.name || "").toLowerCase().trim();
-    const rawEmail = (raw?.email || "").toLowerCase().trim();
-    const rawName = (raw?.name || "").toLowerCase().trim();
+    return getEffectivePartner(wedding, currentUser);
+  }, [wedding, currentUser]);
 
-    const isSelf =
-      (rawEmail && myEmail && rawEmail === myEmail) ||
-      (rawName && myName && rawName === myName) ||
-      (currentUser?.role && raw?.role && currentUser.role === raw.role);
-
-    if (!raw || isSelf) {
-      const isOwner = myEmail && wedding.primaryUserEmail && myEmail === wedding.primaryUserEmail.toLowerCase().trim();
-      const partnerEmail = isOwner
-        ? (wedding.partnerUserEmail || "")
-        : (wedding.primaryUserEmail || "");
-
-      if (currentUser?.role === "GROOM") {
-        return {
-          name: wedding.brideName || raw?.name || "Calon Istri",
-          role: "BRIDE" as const,
-          email: partnerEmail,
-          avatarCardId: raw?.avatarCardId || "duck-bride",
-        };
-      } else {
-        return {
-          name: wedding.groomName || raw?.name || "Calon Suami",
-          role: "GROOM" as const,
-          email: partnerEmail,
-          avatarCardId: raw?.avatarCardId || "penguin-groom",
-        };
-      }
-    }
-
-    return raw;
-  }, [
-    wedding.isPartnerConnected,
-    wedding.partnerInfo,
-    wedding.groomName,
-    wedding.brideName,
-    wedding.primaryUserEmail,
-    wedding.partnerUserEmail,
-    currentUser,
-  ]);
+  const hasUserEditedRef = useRef(false);
 
   // Pull latest DB records upon visiting the account page
   useEffect(() => {
@@ -147,6 +107,8 @@ function AccountPageContent() {
   }, [joinParam]);
 
   useEffect(() => {
+    if (hasUserEditedRef.current) return;
+
     let effectiveGroom = wedding.groomName || "";
     let effectiveBride = wedding.brideName || "";
 
@@ -262,13 +224,14 @@ function AccountPageContent() {
     }
   };
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!requireAuth()) return;
+    hasUserEditedRef.current = false;
     updateWedding({
       groomName,
       brideName,
-      weddingDate: weddingDate ? new Date(weddingDate).toISOString() : "",
+      weddingDate: weddingDate ? (weddingDate.includes("T") ? weddingDate : `${weddingDate}T00:00:00`) : "",
       city,
       venueName,
       venueAddress,
@@ -276,6 +239,7 @@ function AccountPageContent() {
       slug: slug ? slug.toLowerCase().replace(/[^a-z0-9-]/g, "-") : "",
     });
 
+    await syncNow();
     setSaveSuccess(true);
     showToastSuccess("Profil pernikahan berhasil disimpan & disinkronkan! 💍");
     setTimeout(() => setSaveSuccess(false), 3000);
@@ -300,7 +264,7 @@ function AccountPageContent() {
   return (
     <div className="space-y-6 max-w-4xl mx-auto">
       {/* Top Banner */}
-      <div className="bg-gradient-to-r from-amber-50/50 via-white to-pastel-50/50 rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-subtle-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-gradient-to-r from-amber-50/50 via-white to-pastel-50/50 rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-subtle-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-11 h-11 sm:w-12 sm:h-12 rounded-2xl bg-pastel-50 border border-pastel-200 flex items-center justify-center text-pastel-700 shadow-xs shrink-0">
             <User className="w-5 h-5 sm:w-6 sm:h-6 text-pastel-700" />
@@ -315,7 +279,7 @@ function AccountPageContent() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5 self-start sm:self-center shrink-0">
+        <div className="flex flex-wrap items-center gap-2 self-start sm:self-center shrink-0 max-w-full">
           <button
             type="button"
             onClick={() => {
@@ -457,7 +421,7 @@ function AccountPageContent() {
       )}
 
       {/* 1. Duo Workspace & Partner Synchronization Card */}
-      <div id="tour-account-pair" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-5">
+      <div id="tour-account-pair" className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2 border-b border-slate-100">
           <div className="flex items-center gap-2 text-slate-900">
             <ShieldCheck className="w-5 h-5 text-emerald-600 shrink-0" />
@@ -635,7 +599,7 @@ function AccountPageContent() {
       </div>
 
       {/* 2. Form Edit Profil Pernikahan */}
-      <div id="tour-account-profile" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-6">
+      <div id="tour-account-profile" className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-6">
         <div className="flex items-center justify-between pb-2 border-b border-slate-100 text-pastel-700">
           <div className="flex items-center gap-2">
             <Heart className="w-5 h-5 fill-rose-500 text-rose-500 shrink-0" />
@@ -713,7 +677,10 @@ function AccountPageContent() {
                 type="text"
                 required
                 value={groomName}
-                onChange={(e) => setGroomName(e.target.value)}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setGroomName(e.target.value);
+                }}
                 placeholder="Masukkan nama lengkap calon suami"
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
               />
@@ -742,7 +709,10 @@ function AccountPageContent() {
                 type="text"
                 required
                 value={brideName}
-                onChange={(e) => setBrideName(e.target.value)}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setBrideName(e.target.value);
+                }}
                 placeholder="Masukkan nama lengkap calon istri"
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
               />
@@ -760,7 +730,10 @@ function AccountPageContent() {
                 type="date"
                 required
                 value={weddingDate}
-                onChange={(e) => setWeddingDate(e.target.value)}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setWeddingDate(e.target.value);
+                }}
                 className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
               />
             </div>
@@ -775,7 +748,10 @@ function AccountPageContent() {
                 type="text"
                 required
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setCity(e.target.value);
+                }}
                 placeholder="Contoh: Bandung, Jawa Barat"
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
               />
@@ -791,7 +767,10 @@ function AccountPageContent() {
                 type="number"
                 required
                 value={targetBudget}
-                onChange={(e) => setTargetBudget(e.target.value)}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setTargetBudget(e.target.value);
+                }}
                 placeholder="Contoh: 120000000"
                 className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
               />
@@ -808,7 +787,10 @@ function AccountPageContent() {
                 aria-label="Nama Gedung atau Tempat Acara"
                 type="text"
                 value={venueName}
-                onChange={(e) => setVenueName(e.target.value)}
+                onChange={(e) => {
+                  hasUserEditedRef.current = true;
+                  setVenueName(e.target.value);
+                }}
                 placeholder="Contoh: Grand Ballroom Bandung"
                 className="w-full text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300"
               />
@@ -828,7 +810,10 @@ function AccountPageContent() {
                   type="text"
                   required
                   value={slug}
-                  onChange={(e) => setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"))}
+                  onChange={(e) => {
+                    hasUserEditedRef.current = true;
+                    setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, "-"));
+                  }}
                   placeholder="nama-kamu-dan-pasangan"
                   className="w-full text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-b-xl sm:rounded-b-none sm:rounded-r-xl px-3.5 py-2.5 focus:outline-none focus:ring-2 focus:ring-pastel-300 min-w-0"
                 />
@@ -883,7 +868,7 @@ function AccountPageContent() {
       </div>
 
       {/* 3. Manajemen Data & Template */}
-      <div id="tour-account-data" className="bg-white rounded-3xl p-5 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-4">
+      <div id="tour-account-data" className="bg-white rounded-3xl p-4 sm:p-6 border border-slate-200/90 shadow-subtle-sm space-y-4">
         <div className="flex items-center gap-2 pb-2 border-b border-slate-100 text-slate-800">
           <Database className="w-5 h-5 text-amber-600 shrink-0" />
           <h2 className="text-base sm:text-lg font-bold font-serif">

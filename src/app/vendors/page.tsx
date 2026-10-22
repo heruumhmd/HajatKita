@@ -317,7 +317,7 @@ export default function VendorsPage() {
                 </div>
 
                 {/* Stages List */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
                   {vm.stages.map((stage, sIdx) => (
                     <div
                       key={sIdx}
@@ -352,7 +352,7 @@ export default function VendorsPage() {
                         <button
                           type="button"
                           onClick={() => handleToggleStage(vm, sIdx)}
-                          className={`w-full py-1.5 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1 ${
+                          className={`w-full py-2.5 min-h-[44px] rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center justify-center gap-1.5 ${
                             stage.isPaid
                               ? "bg-slate-200 text-slate-700 hover:bg-slate-300"
                               : "bg-pastel-600 hover:bg-pastel-700 text-white"

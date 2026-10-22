@@ -6,6 +6,7 @@ import { useWedding } from "@/context/wedding-context";
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
 import { getCuteCard } from "@/lib/cute-cards";
 import { showToastSuccess, showToastInfo, showConfirmDialog, showSuccessAlert, showErrorAlert } from "@/lib/swal";
+import { getEffectivePartner } from "@/lib/partner-helper";
 
 export function PartnerBanner() {
   const { wedding, currentUser, unpairPartner, requireAuth, syncNow } = useWedding();
@@ -78,38 +79,8 @@ export function PartnerBanner() {
   };
 
   const effectivePartner = React.useMemo(() => {
-    if (!wedding.isPartnerConnected) return null;
-    const raw = wedding.partnerInfo;
-    const myEmail = (currentUser?.email || "").toLowerCase().trim();
-    const myName = (currentUser?.name || "").toLowerCase().trim();
-    const rawEmail = (raw?.email || "").toLowerCase().trim();
-    const rawName = (raw?.name || "").toLowerCase().trim();
-
-    const isSelf =
-      (rawEmail && myEmail && rawEmail === myEmail) ||
-      (rawName && myName && rawName === myName) ||
-      (currentUser?.role && raw?.role && currentUser.role === raw.role);
-
-    if (!raw || isSelf) {
-      if (currentUser?.role === "GROOM") {
-        return {
-          name: wedding.brideName || "Calon Istri",
-          role: "BRIDE" as const,
-          email: wedding.primaryUserEmail || "",
-          avatarCardId: "duck-bride",
-        };
-      } else {
-        return {
-          name: wedding.groomName || "Calon Suami",
-          role: "GROOM" as const,
-          email: wedding.partnerUserEmail || "",
-          avatarCardId: "penguin-groom",
-        };
-      }
-    }
-
-    return raw;
-  }, [wedding.isPartnerConnected, wedding.partnerInfo, wedding.groomName, wedding.brideName, wedding.primaryUserEmail, wedding.partnerUserEmail, currentUser]);
+    return getEffectivePartner(wedding, currentUser);
+  }, [wedding, currentUser]);
 
   const userCard = getCuteCard(currentUser?.avatarCardId);
   const partnerCard = getCuteCard(effectivePartner?.avatarCardId || (currentUser?.role === "GROOM" ? "cat-princess" : "cat-prince"));

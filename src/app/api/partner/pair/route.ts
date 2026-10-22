@@ -216,8 +216,16 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Upsert joining user (User 2) into users table so profile details are persisted
-    const effectiveUser2Role = userRole || (targetWedding.groom_name ? "BRIDE" : "GROOM");
+    // Fetch target workspace owner from users table
+    let targetOwnerRow = null;
+    if (targetOwnerEmail) {
+      const rOwner = await sql`SELECT * FROM users WHERE LOWER(email) = ${targetOwnerEmail} LIMIT 1`;
+      if (rOwner && rOwner.length > 0) targetOwnerRow = rOwner[0];
+    }
+
+    const resolvedOwnerRole = (targetOwnerRow?.role || (targetWedding.groom_name ? "GROOM" : (targetWedding.bride_name ? "BRIDE" : "GROOM"))) as "GROOM" | "BRIDE";
+    // Joining user role MUST be complementary to the owner role so wedding has 1 GROOM and 1 BRIDE
+    const effectiveUser2Role: "GROOM" | "BRIDE" = resolvedOwnerRole === "GROOM" ? "BRIDE" : "GROOM";
     const effectiveUser2Avatar = userAvatarCardId || (effectiveUser2Role === "GROOM" ? "cat-prince" : "cat-princess");
     const effectiveUser2Name = userName || (effectiveUser2Role === "GROOM" ? "Calon Suami" : "Calon Istri");
 
@@ -232,9 +240,13 @@ export async function POST(req: NextRequest) {
         NOW()
       )
       ON CONFLICT (email) DO UPDATE SET
-        name = COALESCE(EXCLUDED.name, users.name),
+        name = CASE 
+          WHEN EXCLUDED.name IN ('Calon Suami', 'Calon Istri', 'Calon Pengantin', 'Saya') AND users.name IS NOT NULL AND users.name != '' AND users.name NOT IN ('Calon Suami', 'Calon Istri', 'Calon Pengantin', 'Saya')
+          THEN users.name
+          ELSE COALESCE(NULLIF(EXCLUDED.name, ''), users.name)
+        END,
         avatar_card_id = COALESCE(${userAvatarCardId || null}, users.avatar_card_id),
-        role = COALESCE(${userRole || null}, users.role),
+        role = ${effectiveUser2Role},
         updated_at = NOW();
     `;
 
@@ -264,8 +276,8 @@ export async function POST(req: NextRequest) {
           partner_user_email = ${cleanUserEmail},
           partner_role = ${effectiveUser2Role},
           partner_avatar_card_id = ${effectiveUser2Avatar},
-          groom_name = CASE WHEN ${effectiveUser2Role === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${effectiveUser2Name} ELSE groom_name END,
-          bride_name = CASE WHEN ${effectiveUser2Role === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${effectiveUser2Name} ELSE bride_name END,
+          groom_name = CASE WHEN ${effectiveUser2Role === "GROOM"} THEN ${effectiveUser2Name} ELSE groom_name END,
+          bride_name = CASE WHEN ${effectiveUser2Role === "BRIDE"} THEN ${effectiveUser2Name} ELSE bride_name END,
           updated_at = NOW()
         WHERE id = ${activeWeddingId}::uuid
       `;
@@ -273,6 +285,13 @@ export async function POST(req: NextRequest) {
       // SCENARIO 2: New / Different person -> Isolate data from any ex-partner!
       activeWeddingId = targetWedding.id;
       chosenWeddingRow = targetWedding;
+
+      // Ensure no stale ACTIVE couple records remain on this workspace before pairing a new partner
+      await sql`
+        UPDATE couple_history
+        SET status = 'UNPAIRED', unpaired_at = NOW(), updated_at = NOW()
+        WHERE wedding_id = ${activeWeddingId}::uuid AND status = 'ACTIVE'
+      `;
 
       // Record in couple_history
       if (cleanUserEmail && targetOwnerEmail) {
@@ -292,8 +311,8 @@ export async function POST(req: NextRequest) {
           partner_role = ${effectiveUser2Role},
           partner_avatar_card_id = ${effectiveUser2Avatar},
           primary_user_email = COALESCE(primary_user_email, ${targetOwnerEmail || null}),
-          groom_name = CASE WHEN ${effectiveUser2Role === "GROOM"} AND (groom_name IS NULL OR groom_name = '') THEN ${effectiveUser2Name} ELSE groom_name END,
-          bride_name = CASE WHEN ${effectiveUser2Role === "BRIDE"} AND (bride_name IS NULL OR bride_name = '') THEN ${effectiveUser2Name} ELSE bride_name END,
+          groom_name = CASE WHEN ${effectiveUser2Role === "GROOM"} THEN ${effectiveUser2Name} ELSE groom_name END,
+          bride_name = CASE WHEN ${effectiveUser2Role === "BRIDE"} THEN ${effectiveUser2Name} ELSE bride_name END,
           updated_at = NOW()
         WHERE id = ${activeWeddingId}::uuid
       `;

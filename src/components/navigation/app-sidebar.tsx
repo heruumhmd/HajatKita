@@ -28,6 +28,7 @@ import {
 import { CuteAvatarBadge } from "@/components/profile/cute-card-badge";
 import { useWedding } from "@/context/wedding-context";
 import { showConfirmDialog, showToastSuccess } from "@/lib/swal";
+import { getEffectivePartner, getCoupleDisplayName } from "@/lib/partner-helper";
 
 interface NavItem {
   label: string;
@@ -84,49 +85,10 @@ export function AppSidebar({
   };
 
   const effectivePartner = React.useMemo(() => {
-    if (!wedding.isPartnerConnected) return null;
-    const raw = wedding.partnerInfo;
-    const myEmail = (currentUser?.email || "").toLowerCase().trim();
-    const myName = (currentUser?.name || "").toLowerCase().trim();
-    const rawEmail = (raw?.email || "").toLowerCase().trim();
-    const rawName = (raw?.name || "").toLowerCase().trim();
+    return getEffectivePartner(wedding, currentUser);
+  }, [wedding, currentUser]);
 
-    const isSelf =
-      (rawEmail && myEmail && rawEmail === myEmail) ||
-      (rawName && myName && rawName === myName) ||
-      (currentUser?.role && raw?.role && currentUser.role === raw.role);
-
-    if (!raw || isSelf) {
-      if (currentUser?.role === "GROOM") {
-        return {
-          name: wedding.brideName || "Calon Istri",
-          role: "BRIDE" as const,
-          email: wedding.primaryUserEmail || "",
-          avatarCardId: "duck-bride",
-        };
-      } else {
-        return {
-          name: wedding.groomName || "Calon Suami",
-          role: "GROOM" as const,
-          email: wedding.partnerUserEmail || "",
-          avatarCardId: "penguin-groom",
-        };
-      }
-    }
-
-    return raw;
-  }, [wedding.isPartnerConnected, wedding.partnerInfo, wedding.groomName, wedding.brideName, wedding.primaryUserEmail, wedding.partnerUserEmail, currentUser]);
-
-  const groomNameShort = wedding.groomName ? wedding.groomName.split(" ")[0] : "";
-  const brideNameShort = wedding.brideName ? wedding.brideName.split(" ")[0] : "";
-  const coupleDisplay =
-    groomNameShort && brideNameShort
-      ? `${groomNameShort} & ${brideNameShort}`
-      : groomNameShort
-      ? `Suami: ${groomNameShort}`
-      : brideNameShort
-      ? `Istri: ${brideNameShort}`
-      : "Calon Pengantin";
+  const { coupleTitle: coupleDisplay } = getCoupleDisplayName(wedding, currentUser);
 
   return (
     <>

@@ -164,13 +164,13 @@ export default function RundownPage() {
       </div>
 
       {/* Phase Filter Bar */}
-      <div id="tour-rundown-filter" className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
+      <div id="tour-rundown-filter" className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none scroll-smooth p-0.5">
         {["ALL", "Akad Nikah", "Adat & Sungkeman", "Resepsi Siang", "Resepsi Malam"].map((p) => (
           <button
             key={p}
             type="button"
             onClick={() => setFilterPhase(p)}
-            className={`px-3.5 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+            className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors flex items-center shrink-0 ${
               filterPhase === p
                 ? "bg-pastel-600 text-white shadow-xs"
                 : "bg-white text-slate-600 border border-slate-200 hover:bg-slate-50"
@@ -209,8 +209,8 @@ export default function RundownPage() {
               {/* Dot on timeline */}
               <span className="absolute -left-[27px] sm:-left-[35px] top-6 w-3.5 h-3.5 rounded-full bg-pastel-600 ring-4 ring-white shadow-xs" />
 
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                <div className="flex items-center gap-2">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <span className="inline-flex items-center gap-1 text-xs font-mono font-black text-pastel-800 bg-pastel-50 px-2.5 py-1 rounded-lg border border-pastel-200">
                     <Clock className="w-3.5 h-3.5" />
                     {item.startTime} - {item.endTime} WIB
@@ -220,29 +220,31 @@ export default function RundownPage() {
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
+                <div className="flex items-center justify-between sm:justify-end gap-2 w-full sm:w-auto pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
                   <span className="inline-flex items-center gap-1 text-xs text-slate-500 font-medium">
                     <MapPin className="w-3.5 h-3.5 text-pastel-600" />
                     {item.location}
                   </span>
 
-                  <button
-                    type="button"
-                    onClick={() => handleOpenEdit(item)}
-                    className="p-1 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
-                    title="Edit Agenda"
-                  >
-                    <Edit2 className="w-3.5 h-3.5" />
-                  </button>
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(item)}
+                      className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
+                      title="Edit Agenda"
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                    </button>
 
-                  <button
-                    type="button"
-                    onClick={() => handleDeleteRundown(item)}
-                    className="p-1 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
-                    title="Hapus Agenda"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteRundown(item)}
+                      className="p-1.5 text-slate-400 hover:text-rose-500 rounded-lg transition-colors"
+                      title="Hapus Agenda"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
 

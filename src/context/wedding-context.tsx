@@ -27,6 +27,7 @@ import {
 import { getDefaultCuteCardForRole } from "@/lib/cute-cards";
 import { showToastWarning } from "@/lib/swal";
 import { mergePlanData } from "@/lib/merge-plan-data";
+import { getEffectivePartner } from "@/lib/partner-helper";
 
 const STORAGE_KEY = "HAJAT_KITA_STORE_V2";
 const AUTH_STORAGE_KEY = "HAJAT_AUTH_USER_V2";
@@ -608,52 +609,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         let updatedWedding = weddingRef.current;
         if (data.wedding) {
           const userNow = currentUserRef.current;
-          let partnerInfo = data.wedding.partnerInfo;
+          const partnerInfo = getEffectivePartner(data.wedding, userNow);
 
-          // Reciprocal partner resolution using couple data
-          if (data.wedding.couple && userNow?.email) {
-            const myEmail = userNow.email.toLowerCase().trim();
-            const u1 = data.wedding.couple.user1;
-            const u2 = data.wedding.couple.user2;
-            if (u1 && u1.email && u1.email.toLowerCase().trim() === myEmail) {
-              partnerInfo = u2;
-            } else if (u2 && u2.email && u2.email.toLowerCase().trim() === myEmail) {
-              partnerInfo = u1;
-            }
-          }
-
-          // Infallible Safeguard: A user can NEVER be their own partner!
-          if (partnerInfo && userNow) {
-            const myEmail = (userNow.email || "").toLowerCase().trim();
-            const myName = (userNow.name || "").toLowerCase().trim();
-            const pEmail = (partnerInfo.email || "").toLowerCase().trim();
-            const pName = (partnerInfo.name || "").toLowerCase().trim();
-
-            const isSelf =
-              (myEmail && pEmail && myEmail === pEmail) ||
-              (myName && pName && myName === pName) ||
-              (userNow.role && partnerInfo.role && userNow.role === partnerInfo.role);
-
-            if (isSelf) {
-              if (userNow.role === "GROOM") {
-                partnerInfo = {
-                  name: data.wedding.brideName || weddingRef.current.brideName || "Calon Istri",
-                  role: "BRIDE",
-                  email: data.wedding.primaryUserEmail || "",
-                  avatarCardId: "duck-bride",
-                };
-              } else {
-                partnerInfo = {
-                  name: data.wedding.groomName || weddingRef.current.groomName || "Calon Suami",
-                  role: "GROOM",
-                  email: data.wedding.partnerUserEmail || "",
-                  avatarCardId: "penguin-groom",
-                };
-              }
-            }
-          }
-
-          // Bug 10 fix: announce partner connection OUTSIDE the updater to prevent duplicate logs in StrictMode
+          // Announce partner connection OUTSIDE the updater to prevent duplicate logs in StrictMode
           const prevConnected = weddingRef.current.isPartnerConnected;
           const newConnected = Boolean(data.wedding.isPartnerConnected);
           if (!prevConnected && newConnected) {
@@ -667,7 +625,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           updatedWedding = {
             ...weddingRef.current,
             ...data.wedding,
-            partnerInfo: partnerInfo || weddingRef.current.partnerInfo,
+            partnerInfo: partnerInfo || undefined,
             id: data.wedding.id || weddingRef.current.id,
             version: typeof data.wedding.version === "number" ? data.wedding.version : versionRef.current,
           };
@@ -740,6 +698,33 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         });
       } else if (data.success && !data.exists) {
         hasLoadedRemoteRef.current = true;
+        const currentW = weddingRef.current;
+        const activeEmail = (email || currentUserRef.current?.email || "").toLowerCase().trim();
+        const wasConnected = currentW.isPartnerConnected;
+        const belongedToOther = Boolean(currentW.primaryUserEmail && activeEmail && currentW.primaryUserEmail.toLowerCase().trim() !== activeEmail);
+
+        if (wasConnected || belongedToOther) {
+          const freshCode = generateUniqueInviteCode();
+          const cleanWedding: WeddingProject = {
+            ...cleanEmptyWedding,
+            id: `w-${crypto.randomUUID()}`,
+            inviteCode: freshCode,
+            primaryUserEmail: activeEmail || undefined,
+            groomName: currentUserRef.current?.role === "GROOM" ? (currentUserRef.current?.name || "") : "",
+            brideName: currentUserRef.current?.role === "BRIDE" ? (currentUserRef.current?.name || "") : "",
+            isPartnerConnected: false,
+            partnerInfo: undefined,
+            couple: undefined,
+            version: 0,
+          };
+          weddingRef.current = cleanWedding;
+          setWedding(cleanWedding);
+          if (typeof window !== "undefined") {
+            try {
+              localStorage.removeItem("hajat_workspace_token");
+            } catch {}
+          }
+        }
       }
     } catch (e) {
       console.warn("Failed to fetch wedding data from database", e);
@@ -1717,8 +1702,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const updateWedding = (data: Partial<WeddingProject>) => {
     setWedding((prev) => {
       const updated = { ...prev, ...data };
-      if (data.groomName && data.brideName && !data.slug) {
-        const slug = `${data.groomName.split(" ")[0]}-${data.brideName.split(" ")[0]}`
+      if (updated.groomName && updated.brideName && !updated.slug) {
+        const slug = `${updated.groomName.split(" ")[0]}-${updated.brideName.split(" ")[0]}`
           .toLowerCase()
           .replace(/[^a-z0-9]/g, "-");
         updated.slug = slug;

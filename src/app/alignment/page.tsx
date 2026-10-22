@@ -309,18 +309,19 @@ export default function AlignmentPage() {
                 {t.question}
               </h3>
 
-              {/* Side-by-Side Answers */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Partner Perspectives */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5 sm:gap-4">
                 {/* Groom's Perspective */}
-                <div className="p-4 rounded-2xl bg-slate-50 border border-slate-200 space-y-2">
+                <div className="p-4 sm:p-4.5 rounded-2xl rounded-tl-sm bg-gradient-to-br from-slate-50 via-white to-slate-50/80 border border-slate-200/90 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-slate-600 uppercase tracking-wider">
+                    <span className="text-[11px] font-bold text-slate-700 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-slate-400" />
                       Jawaban Calon Suami ({groomNameShort})
                     </span>
                     <button
                       type="button"
                       onClick={() => handleOpenAnswer(t.id, "GROOM", t.groomAnswer)}
-                      className="p-1 text-slate-400 hover:text-pastel-600"
+                      className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg hover:bg-slate-100 transition-colors"
                       title="Ubah Jawaban"
                     >
                       <Edit2 className="w-3.5 h-3.5" />
@@ -334,15 +335,16 @@ export default function AlignmentPage() {
                 </div>
 
                 {/* Bride's Perspective */}
-                <div className="p-4 rounded-2xl bg-rose-50/40 border border-rose-200/80 space-y-2">
+                <div className="p-4 sm:p-4.5 rounded-2xl rounded-tr-sm bg-gradient-to-br from-rose-50/60 via-white to-rose-50/30 border border-rose-200/80 shadow-2xs space-y-2">
                   <div className="flex items-center justify-between">
-                    <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider">
+                    <span className="text-[11px] font-bold text-rose-800 uppercase tracking-wider flex items-center gap-1.5">
+                      <span className="w-2 h-2 rounded-full bg-rose-400" />
                       Jawaban Calon Istri ({brideNameShort})
                     </span>
                     <button
                       type="button"
                       onClick={() => handleOpenAnswer(t.id, "BRIDE", t.brideAnswer)}
-                      className="p-1 text-rose-400 hover:text-rose-700"
+                      className="p-1.5 text-rose-400 hover:text-rose-700 rounded-lg hover:bg-rose-50 transition-colors"
                       title="Ubah Jawaban"
                     >
                       <Edit2 className="w-3.5 h-3.5" />

@@ -186,14 +186,14 @@ export default function TimelinePage() {
 
       {/* Filters Timeline Bar */}
       <div className="bg-white rounded-2xl p-4 border border-slate-200/90 shadow-subtle-sm flex flex-col md:flex-row items-stretch md:items-center justify-between gap-3">
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none">
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 md:pb-0 scrollbar-none scroll-smooth p-0.5">
           {["ALL", "H-12 Bulan", "H-6 Bulan", "H-3 Bulan", "H-2 Bulan", "H-1 Bulan", "Minggu H"].map(
             (tag) => (
               <button
                 key={tag}
                 type="button"
                 onClick={() => setSelectedTimeline(tag)}
-                className={`px-3 py-1.5 rounded-xl text-xs font-semibold whitespace-nowrap transition-colors ${
+                className={`min-h-[38px] px-3.5 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-colors flex items-center shrink-0 ${
                   selectedTimeline === tag
                     ? "bg-pastel-600 text-white shadow-xs"
                     : "bg-slate-100 text-slate-600 hover:bg-slate-200"
@@ -208,7 +208,7 @@ export default function TimelinePage() {
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none"
+          className="text-xs font-semibold bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-700 focus:outline-none min-h-[38px]"
         >
           <option value="ALL">Semua Kategori</option>
           <option value="ADMINISTRASI_KUA">Birokrasi &amp; KUA</option>
@@ -246,24 +246,45 @@ export default function TimelinePage() {
             return (
               <div
                 key={item.id}
-                className={`bg-white rounded-3xl p-5 border transition-all shadow-subtle-sm flex items-start gap-4 ${
+                className={`bg-white rounded-3xl p-4 sm:p-5 border transition-all shadow-subtle-sm flex flex-col sm:flex-row sm:items-start gap-3 sm:gap-4 ${
                   isDone
                     ? "border-emerald-200 bg-emerald-50/10 opacity-70"
                     : "border-slate-200/90 hover:border-pastel-300"
                 }`}
               >
-                <button
-                  type="button"
-                  onClick={() => handleToggleTask(item)}
-                  className={`w-6 h-6 rounded-xl flex items-center justify-center border transition-all shrink-0 mt-0.5 shadow-2xs ${
-                    isDone
-                      ? "bg-emerald-600 border-emerald-600 text-white"
-                      : "border-slate-300 hover:border-pastel-400 bg-white"
-                  }`}
-                  aria-label={`Tandai selesai: ${item.title}`}
-                >
-                  {isDone && <Check className="w-4 h-4 stroke-[3]" />}
-                </button>
+                <div className="flex items-center justify-between sm:justify-start gap-3 w-full sm:w-auto">
+                  <button
+                    type="button"
+                    onClick={() => handleToggleTask(item)}
+                    className={`w-7 h-7 rounded-xl flex items-center justify-center border transition-all shrink-0 shadow-2xs ${
+                      isDone
+                        ? "bg-emerald-600 border-emerald-600 text-white"
+                        : "border-slate-300 hover:border-pastel-400 bg-white"
+                    }`}
+                    aria-label={`Tandai selesai: ${item.title}`}
+                  >
+                    {isDone && <Check className="w-4 h-4 stroke-[3]" />}
+                  </button>
+
+                  <div className="flex items-center gap-1 sm:hidden">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenEdit(item)}
+                      className="p-1.5 text-slate-400 hover:text-pastel-600 rounded-lg transition-colors"
+                      title="Edit Tugas"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteTask(item)}
+                      className="p-1.5 text-slate-300 hover:text-rose-500 rounded-lg transition-colors"
+                      title="Hapus Tugas"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
+                </div>
 
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-2 mb-1.5">
@@ -295,7 +316,7 @@ export default function TimelinePage() {
                   )}
                 </div>
 
-                <div className="flex items-center gap-1 shrink-0">
+                <div className="hidden sm:flex items-center gap-1 shrink-0">
                   <button
                     type="button"
                     onClick={() => handleOpenEdit(item)}

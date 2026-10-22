@@ -194,7 +194,11 @@ function GuestsContent() {
     const inviteUrl = `${origin}/invitation/${wedding.slug || "undangan-kami"}`;
 
     const formattedDate = wedding.weddingDate
-      ? new Date(wedding.weddingDate).toLocaleDateString("id-ID", {
+      ? new Date(
+          wedding.weddingDate.includes("T")
+            ? wedding.weddingDate
+            : `${wedding.weddingDate}T00:00:00`
+        ).toLocaleDateString("id-ID", {
           weekday: "long",
           year: "numeric",
           month: "long",
@@ -237,42 +241,44 @@ function GuestsContent() {
         </div>
 
         {/* Tab Toggle */}
-        <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl self-stretch sm:self-auto overflow-x-auto max-w-full">
-          <button
-            type="button"
-            onClick={() => switchTab("GUESTS")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === "GUESTS"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Daftar Tamu &amp; WA ({guests.length})
-          </button>
-          <button
-            id="tour-guests-quota"
-            type="button"
-            onClick={() => switchTab("QUOTA")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === "QUOTA"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Kuota 4 Pilar
-          </button>
-          <button
-            id="tour-guests-ledger"
-            type="button"
-            onClick={() => switchTab("AMPLOP_LEDGER")}
-            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap ${
-              activeTab === "AMPLOP_LEDGER"
-                ? "bg-white text-slate-900 shadow-xs"
-                : "text-slate-600 hover:text-slate-900"
-            }`}
-          >
-            Buku Amplop
-          </button>
+        <div className="relative max-w-full self-stretch sm:self-auto">
+          <div className="flex items-center gap-1.5 bg-slate-100 p-1.5 rounded-2xl overflow-x-auto scroll-smooth scrollbar-none overscroll-x-contain">
+            <button
+              type="button"
+              onClick={() => switchTab("GUESTS")}
+              className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center shrink-0 ${
+                activeTab === "GUESTS"
+                  ? "bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+              }`}
+            >
+              Daftar Tamu &amp; WA ({guests.length})
+            </button>
+            <button
+              id="tour-guests-quota"
+              type="button"
+              onClick={() => switchTab("QUOTA")}
+              className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center shrink-0 ${
+                activeTab === "QUOTA"
+                  ? "bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+              }`}
+            >
+              Kuota 4 Pilar
+            </button>
+            <button
+              id="tour-guests-ledger"
+              type="button"
+              onClick={() => switchTab("AMPLOP_LEDGER")}
+              className={`min-h-[44px] px-4 py-2.5 rounded-xl text-xs font-bold transition-all whitespace-nowrap flex items-center justify-center shrink-0 ${
+                activeTab === "AMPLOP_LEDGER"
+                  ? "bg-white text-slate-900 shadow-xs ring-1 ring-slate-200/50"
+                  : "text-slate-600 hover:text-slate-900 hover:bg-white/50"
+              }`}
+            >
+              Buku Amplop
+            </button>
+          </div>
         </div>
       </div>
 

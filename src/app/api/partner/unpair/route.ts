@@ -59,24 +59,42 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ success: true, message: "Tidak ada koneksi pasangan aktif yang ditemukan." });
     }
 
+    // If wedding is already not connected, return clean 200 OK
+    if (!targetWedding.is_partner_connected) {
+      return NextResponse.json({
+        success: true,
+        message: "Koneksi pasangan pada workspace ini sudah tidak aktif.",
+        unpairedWeddingId: targetWedding.id,
+      });
+    }
+
     const u1 = (targetWedding.primary_user_email || "").toLowerCase().trim();
     const u2 = (targetWedding.partner_user_email || targetWedding.partner_email || "").toLowerCase().trim();
 
-    // Verify user belongs to this wedding
-    if (u1 !== cleanUserEmail && u2 !== cleanUserEmail) {
-      return NextResponse.json({ success: false, message: "Forbidden: You are not authorized to unpair this wedding" }, { status: 403 });
+    // Verify user belongs to this wedding (either as primary owner, partner user, or historical couple member)
+    const isOwner = cleanUserEmail === u1;
+    const isPartner = cleanUserEmail === u2;
+
+    if (!isOwner && !isPartner) {
+      // Also check couple_history for active couple relation
+      const historyCheck = await sql`
+        SELECT id FROM couple_history
+        WHERE wedding_id = ${targetWedding.id}::uuid
+          AND (LOWER(user1_email) = ${cleanUserEmail} OR LOWER(user2_email) = ${cleanUserEmail})
+          AND status = 'ACTIVE'
+        LIMIT 1
+      `;
+      if (!historyCheck || historyCheck.length === 0) {
+        return NextResponse.json({ success: false, message: "Forbidden: You are not authorized to unpair this wedding" }, { status: 403 });
+      }
     }
 
-    // 1. Mark couple_history as UNPAIRED (preserving data in database!)
-    if (u1 && u2) {
-      await sql`
-        UPDATE couple_history
-        SET status = 'UNPAIRED', unpaired_at = NOW(), updated_at = NOW()
-        WHERE ((LOWER(user1_email) = ${u1} AND LOWER(user2_email) = ${u2})
-            OR (LOWER(user1_email) = ${u2} AND LOWER(user2_email) = ${u1}))
-          AND status = 'ACTIVE'
-      `;
-    }
+    // 1. Mark all active couple_history for this wedding as UNPAIRED (preserving audit data in DB!)
+    await sql`
+      UPDATE couple_history
+      SET status = 'UNPAIRED', unpaired_at = NOW(), updated_at = NOW()
+      WHERE wedding_id = ${targetWedding.id}::uuid AND status = 'ACTIVE'
+    `;
 
     // 2. Mark wedding as disconnected, but keep wedding row & plan_data safe in Neon!
     await sql`

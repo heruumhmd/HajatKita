@@ -37,4 +37,27 @@ test("API Suite: /api/partner/unpair Security Tests", async (t) => {
     assert.equal(body.success, false);
     assert.match(body.message, /valid/i);
   });
+
+  await t.test("Authenticated POST with valid UUID handles unconfigured DB or returns graceful response without crash", async () => {
+    const token = createWorkspaceToken("qa-user@example.test", "11111111-2222-4333-8444-555555555555");
+    const headers = {
+      "Content-Type": "application/json",
+      "x-hajat-token": token,
+    };
+
+    const req = new NextRequest("http://localhost:3000/api/partner/unpair", {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ weddingId: "11111111-2222-4333-8444-555555555555" }),
+    });
+
+    const res = await POST(req);
+    // In CI/unit without DATABASE_URL, sql is undefined so it returns 503 instead of 500 crash
+    assert.ok(
+      res.status === 503 || res.status === 200,
+      `Expected 503 (DB unconfigured) or 200 OK, got ${res.status}`
+    );
+    const body = await res.json();
+    assert.equal(typeof body.message, "string");
+  });
 });

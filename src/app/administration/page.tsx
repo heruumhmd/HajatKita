@@ -1,12 +1,26 @@
 "use client";
 
-import React from "react";
-import { FileCheck2, CheckCircle2, Circle, AlertCircle, Info, ExternalLink, Download } from "lucide-react";
+import React, { useState } from "react";
+import { FileCheck2, CheckCircle2, Circle, AlertCircle, Info, ExternalLink, Download, ChevronDown } from "lucide-react";
 import { useWedding } from "@/context/wedding-context";
 import { showToastSuccess, showToastInfo } from "@/lib/swal";
 
 export default function AdministrationPage() {
   const { adminSteps, toggleAdminRequirement, requireAuth } = useWedding();
+
+  const [openSteps, setOpenSteps] = useState<Record<string, boolean>>({
+    "step-1": true,
+    "step-2": true,
+    "step-3": true,
+    "step-4": true,
+  });
+
+  const toggleStep = (stepId: string) => {
+    setOpenSteps((prev) => ({
+      ...prev,
+      [stepId]: !(prev[stepId] ?? true),
+    }));
+  };
 
   const totalReqs = adminSteps.flatMap((s) => s.requirements);
   const doneReqs = totalReqs.filter((r) => r.isDone).length;
@@ -102,72 +116,83 @@ export default function AdministrationPage() {
       <div id="tour-admin-steps" className="space-y-4">
         {adminSteps.map((step) => {
           const stepDone = step.requirements.every((r) => r.isDone);
+          const isOpen = openSteps[step.id] ?? true;
 
           return (
             <div
               key={step.id}
-              className={`bg-white rounded-3xl p-6 border transition-all shadow-subtle-sm space-y-4 ${
+              className={`bg-white rounded-3xl p-5 sm:p-6 border transition-all shadow-subtle-sm space-y-4 ${
                 stepDone ? "border-emerald-200 bg-emerald-50/10" : "border-slate-200/90"
               }`}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-100">
+              <button
+                type="button"
+                onClick={() => toggleStep(step.id)}
+                aria-expanded={isOpen}
+                className="w-full text-left flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-100 group cursor-pointer"
+              >
                 <div className="flex items-center gap-3">
-                  <span className="w-8 h-8 rounded-xl bg-pastel-50 border border-pastel-200 font-bold font-mono text-pastel-700 flex items-center justify-center text-sm shadow-xs">
+                  <span className="w-8 h-8 rounded-xl bg-pastel-50 border border-pastel-200 font-bold font-mono text-pastel-700 flex items-center justify-center text-sm shadow-xs shrink-0">
                     {step.stepNumber}
                   </span>
                   <div>
-                    <h3 className="font-extrabold text-slate-900 text-sm sm:text-base font-serif">
+                    <h3 className="font-extrabold text-slate-900 text-sm sm:text-base font-serif group-hover:text-pastel-700 transition-colors">
                       {step.stageName}
                     </h3>
                     <p className="text-xs text-slate-500">Instansi: {step.agency}</p>
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 text-xs">
+                <div className="flex items-center justify-between sm:justify-end gap-2 text-xs w-full sm:w-auto">
                   <span className="px-2.5 py-1 rounded-lg bg-slate-100 text-slate-600 font-medium">
                     Estimasi: {step.estimatedDays}
                   </span>
                   <span className="px-2.5 py-1 rounded-lg bg-pastel-50 text-pastel-800 font-bold border border-pastel-200">
                     Biaya: {step.cost}
                   </span>
+                  <div className="p-1 rounded-lg text-slate-400 group-hover:text-slate-600 ml-1">
+                    <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isOpen ? "rotate-180" : ""}`} />
+                  </div>
                 </div>
-              </div>
+              </button>
 
               {/* Requirement Checkboxes */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
-                {step.requirements.map((req) => (
-                  <div
-                    key={req.id}
-                    onClick={() => handleToggleReq(step.id, req)}
-                    className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
-                      req.isDone
-                        ? "bg-emerald-50/40 border-emerald-200 text-slate-800"
-                        : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700"
-                    }`}
-                  >
-                    <button
-                      type="button"
-                      className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-all shrink-0 mt-0.5 ${
+              {isOpen && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 pt-1">
+                  {step.requirements.map((req) => (
+                    <div
+                      key={req.id}
+                      onClick={() => handleToggleReq(step.id, req)}
+                      className={`flex items-start gap-3 p-3 rounded-2xl border transition-all cursor-pointer ${
                         req.isDone
-                          ? "bg-emerald-600 border-emerald-600 text-white"
-                          : "border-slate-300 bg-white"
+                          ? "bg-emerald-50/40 border-emerald-200 text-slate-800"
+                          : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700"
                       }`}
-                      aria-label={req.title}
                     >
-                      {req.isDone && <CheckCircle2 className="w-3.5 h-3.5" />}
-                    </button>
+                      <button
+                        type="button"
+                        className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-all shrink-0 mt-0.5 ${
+                          req.isDone
+                            ? "bg-emerald-600 border-emerald-600 text-white"
+                            : "border-slate-300 bg-white"
+                        }`}
+                        aria-label={req.title}
+                      >
+                        {req.isDone && <CheckCircle2 className="w-3.5 h-3.5" />}
+                      </button>
 
-                    <div className="flex-1 min-w-0">
-                      <span className={`text-xs font-semibold block ${req.isDone ? "line-through text-slate-400" : ""}`}>
-                        {req.title}
-                      </span>
-                      {req.note && (
-                        <span className="text-[10px] text-slate-400 block mt-0.5">{req.note}</span>
-                      )}
+                      <div className="flex-1 min-w-0">
+                        <span className={`text-xs font-semibold block ${req.isDone ? "line-through text-slate-400" : ""}`}>
+                          {req.title}
+                        </span>
+                        {req.note && (
+                          <span className="text-[10px] text-slate-400 block mt-0.5">{req.note}</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </div>
           );
         })}

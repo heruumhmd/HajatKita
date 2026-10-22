@@ -227,7 +227,11 @@ function DynamicInvitationContent() {
 
   // Format date readable
   const formattedDate = weddingData.weddingDate
-    ? new Date(weddingData.weddingDate).toLocaleDateString("id-ID", {
+    ? new Date(
+        weddingData.weddingDate.includes("T")
+          ? weddingData.weddingDate
+          : `${weddingData.weddingDate}T00:00:00`
+      ).toLocaleDateString("id-ID", {
         weekday: "long",
         year: "numeric",
         month: "long",
@@ -281,7 +285,7 @@ function DynamicInvitationContent() {
             >
               {/* Wax Seal Monogram */}
               <div className="absolute bottom-2 w-12 h-12 rounded-full bg-gradient-to-br from-amber-600 via-amber-700 to-amber-900 border-2 border-amber-300 shadow-md flex items-center justify-center text-amber-100 font-serif font-black text-sm">
-                💍
+                <Heart className="w-5 h-5 text-amber-200 fill-amber-200 drop-shadow-xs" />
               </div>
             </div>
           </div>

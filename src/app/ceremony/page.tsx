@@ -6,7 +6,7 @@ import { useWedding } from "@/context/wedding-context";
 import { showToastSuccess } from "@/lib/swal";
 
 export default function CeremonyPage() {
-  const { wedding, updateWedding, requireAuth } = useWedding();
+  const { wedding, updateWedding, requireAuth, syncNow } = useWedding();
 
   // Ceremony Details edit mode
   const [isEditingCeremony, setIsEditingCeremony] = useState(false);
@@ -38,7 +38,7 @@ export default function CeremonyPage() {
   const recommendedBuffetPax = totalEstimatedHeads;
   const recommendedStallPax = totalEstimatedHeads * 4;
 
-  const handleSaveCeremony = () => {
+  const handleSaveCeremony = async () => {
     if (!requireAuth()) return;
     updateWedding({
       maharDetails: mahar,
@@ -46,6 +46,7 @@ export default function CeremonyPage() {
       penghulu,
       saksiNikah: saksi,
     });
+    await syncNow();
     showToastSuccess("Detail sakral akad nikah berhasil disimpan! 💍");
     setIsEditingCeremony(false);
   };

@@ -9,7 +9,7 @@
     "lint": "next lint",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
-    "test:unit": "npx tsx --test tests/unit/token.test.mjs tests/unit/merge.test.mjs tests/unit/validation.test.mjs",
+    "test:unit": "npx tsx --test tests/unit/token.test.mjs tests/unit/merge.test.mjs tests/unit/validation.test.mjs tests/unit/partner.test.mjs",
     "test:static": "npx tsx tests/static/run-static-checks.mjs",
     "test:api": "npx tsx tests/api/run-api-tests.mjs",
     "test:e2e": "npx playwright test",
