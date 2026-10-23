@@ -146,7 +146,7 @@ export default function AlignmentPage() {
   return (
     <div className="space-y-6">
       {/* Top Banner */}
-      <div id="tour-alignment-summary" className="bg-gradient-to-r from-amber-50/50 via-white to-rose-50/50 rounded-3xl p-6 border border-slate-200/90 shadow-subtle-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+      <div id="tour-alignment-summary" className="bg-gradient-to-r from-rose-50/70 via-stone-50/50 to-rose-100/40 rounded-3xl p-6 border border-rose-200/80 shadow-subtle-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shadow-xs">
             <HeartHandshake className="w-6 h-6 text-rose-600" />

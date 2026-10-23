@@ -40,7 +40,7 @@ export function FinancialGuardBanner() {
   const innerCircumference = 2 * Math.PI * 26;
 
   return (
-    <div className="bg-gradient-to-r from-amber-50/50 via-white to-pastel-50/50 rounded-3xl p-5 border border-slate-200/90 shadow-subtle-sm">
+    <div className="surface-modern rounded-3xl p-5 border border-slate-200/90 shadow-subtle-sm">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-start gap-3.5">
           <div className="w-10 h-10 rounded-2xl bg-amber-50 border border-amber-200 flex items-center justify-center text-amber-700 shrink-0 shadow-xs">
