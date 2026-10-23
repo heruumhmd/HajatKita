@@ -98,7 +98,8 @@ function AccountPageContent() {
   // Pull latest DB records upon visiting the account page
   useEffect(() => {
     refreshWorkspace();
-  }, [refreshWorkspace]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   useEffect(() => {
     if (joinParam) {
@@ -127,6 +128,21 @@ function AccountPageContent() {
         effectiveBride = currentUser.name;
       } else if (effectivePartner?.role === "BRIDE" && effectivePartner?.name) {
         effectiveBride = effectivePartner.name;
+      }
+    }
+
+    // If groom and bride names are corrupted to the same string, resolve properly based on roles
+    if (
+      effectiveGroom &&
+      effectiveBride &&
+      effectiveGroom.trim().toLowerCase() === effectiveBride.trim().toLowerCase()
+    ) {
+      if (currentUser?.role === "BRIDE") {
+        effectiveBride = currentUser.name || effectiveBride;
+        effectiveGroom = effectivePartner?.role === "GROOM" && effectivePartner?.name ? effectivePartner.name : "";
+      } else if (currentUser?.role === "GROOM") {
+        effectiveGroom = currentUser.name || effectiveGroom;
+        effectiveBride = effectivePartner?.role === "BRIDE" && effectivePartner?.name ? effectivePartner.name : "";
       }
     }
 

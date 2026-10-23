@@ -245,4 +245,76 @@ test("Merge Suite: Unit Tests", async (t) => {
     const step2 = result.adminSteps.find((s) => s.id === "step-2");
     assert.equal(step2.done, true);
   });
+
+  // =========================================================================
+  // KNOWN BUG TEST 4: Concurrent deposits & boost merging on same goal
+  // =========================================================================
+  await t.test("BUG CHECK: Two concurrent boost deposits (Groom & Bride) are both preserved and currentAmount sum is exact", () => {
+    const existing = {
+      lifeGoals: [
+        {
+          id: "f20eb503-bca8-4d2c-9daf-a8b7cdd14b1e",
+          title: "DP Rumah",
+          targetAmount: 100000000,
+          currentAmount: 10000000,
+          deposits: [
+            { id: "dep-groom-1", amount: 10000000, contributor: "GROOM", date: "2026-10-23" },
+          ],
+        },
+      ],
+    };
+
+    const incoming = {
+      lifeGoals: [
+        {
+          id: "f20eb503-bca8-4d2c-9daf-a8b7cdd14b1e",
+          title: "DP Rumah",
+          targetAmount: 100000000,
+          currentAmount: 5000000,
+          deposits: [
+            { id: "dep-bride-1", amount: 5000000, contributor: "BRIDE", date: "2026-10-23" },
+          ],
+        },
+      ],
+    };
+
+    const result = mergePlanData(existing, incoming);
+    assert.equal(result.lifeGoals.length, 1);
+    const goal = result.lifeGoals[0];
+    assert.equal(goal.deposits.length, 2, "Both deposits must be retained");
+    assert.equal(goal.currentAmount, 15000000, "currentAmount must reflect exact sum of both deposits");
+  });
+
+  // =========================================================================
+  // KNOWN BUG TEST 5: Incoming new goal cleans up deposits in tombstone set
+  // =========================================================================
+  await t.test("BUG CHECK: Newly incoming goal does not resurrect a deposit whose ID is tombstoned", () => {
+    const existing = {
+      lifeGoals: [],
+      deletedItemIds: ["dep-stale-1"],
+    };
+
+    const incoming = {
+      lifeGoals: [
+        {
+          id: "lg-new-1",
+          title: "Dana Darurat",
+          targetAmount: 50000000,
+          currentAmount: 20000000,
+          deposits: [
+            { id: "dep-stale-1", amount: 15000000, contributor: "GROOM", date: "2026-10-20" },
+            { id: "dep-active-2", amount: 5000000, contributor: "BRIDE", date: "2026-10-22" },
+          ],
+        },
+      ],
+    };
+
+    const result = mergePlanData(existing, incoming);
+    assert.equal(result.lifeGoals.length, 1);
+    const goal = result.lifeGoals[0];
+    assert.equal(goal.deposits.length, 1, "Only dep-active-2 must be kept");
+    assert.equal(goal.deposits[0].id, "dep-active-2");
+    assert.equal(goal.currentAmount, 5000000, "currentAmount must be recalculated from remaining active deposits");
+  });
 });
+

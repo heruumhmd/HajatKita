@@ -147,10 +147,21 @@ export function mergeEntityList<T extends { id?: string }>(
       if (fk && seenFallbackKeys.has(fk)) continue;
     }
 
-    if (inc.id) seenIds.add(inc.id);
-    const fk = getFallbackKey(inc);
-    if (!inc.id && fk) seenFallbackKeys.add(fk);
-    result.push(inc);
+    let cleanedItem: any = inc;
+    if (Array.isArray((inc as any).deposits)) {
+      const filteredDeposits = (inc as any).deposits.filter((d: any) => !isDeleted(d?.id));
+      const recalcTotal = filteredDeposits.reduce((acc: number, d: any) => acc + (d.amount || 0), 0);
+      cleanedItem = {
+        ...inc,
+        deposits: filteredDeposits,
+        currentAmount: recalcTotal,
+      };
+    }
+
+    if (cleanedItem.id) seenIds.add(cleanedItem.id);
+    const fk = getFallbackKey(cleanedItem);
+    if (!cleanedItem.id && fk) seenFallbackKeys.add(fk);
+    result.push(cleanedItem);
   }
 
   return result;

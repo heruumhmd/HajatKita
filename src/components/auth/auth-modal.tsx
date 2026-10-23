@@ -22,6 +22,7 @@ export function AuthModal() {
   const [role, setRole] = useState<"GROOM" | "BRIDE">("GROOM");
   const [bio, setBio] = useState("");
   const [selectedCardId, setSelectedCardId] = useState<string>("cat-prince");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   if (!isAuthModalOpen) return null;
 
@@ -35,21 +36,26 @@ export function AuthModal() {
     loginWithGoogle();
   };
 
-  const handleFormSubmit = (e: React.FormEvent) => {
+  const handleFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!fullName.trim() || !email.trim()) return;
+    if (!fullName.trim() || !email.trim() || isSubmitting) return;
 
-    login({
-      name: fullName,
-      nickname: nickname || fullName.split(" ")[0],
-      email,
-      phone,
-      role,
-      bio,
-      avatarCardId: selectedCardId,
-      provider: "credentials",
-    });
-    showToastSuccess("Berhasil masuk! Selamat datang di Hajat Kita 🎉");
+    setIsSubmitting(true);
+    try {
+      await login({
+        name: fullName,
+        nickname: nickname || fullName.split(" ")[0],
+        email,
+        phone,
+        role,
+        bio,
+        avatarCardId: selectedCardId,
+        provider: "credentials",
+      });
+      showToastSuccess("Berhasil masuk! Selamat datang di Hajat Kita 🎉");
+    } finally {
+      setIsSubmitting(false);
+    }
   };
 
   const currentCard = getCuteCard(selectedCardId);
@@ -232,9 +238,17 @@ export function AuthModal() {
 
             <button
               type="submit"
-              className="w-full py-3 px-4 rounded-2xl bg-pastel-600 hover:bg-pastel-700 text-white font-bold text-xs sm:text-sm shadow-xs transition-colors mt-2"
+              disabled={isSubmitting}
+              className="w-full py-3 px-4 rounded-2xl bg-pastel-600 hover:bg-pastel-700 disabled:opacity-60 text-white font-bold text-xs sm:text-sm shadow-xs transition-colors mt-2 flex items-center justify-center gap-2"
             >
-              Simpan Profil &amp; Buka Rencana
+              {isSubmitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                  <span>Menyiapkan Workspace...</span>
+                </>
+              ) : (
+                "Simpan Profil & Buka Rencana"
+              )}
             </button>
           </form>
         </div>

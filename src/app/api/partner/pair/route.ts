@@ -46,7 +46,8 @@ export async function POST(req: NextRequest) {
 
     const rawToken =
       req.headers.get("x-hajat-token") ||
-      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+      req.cookies.get("hajat_workspace_token")?.value;
 
     let tokenEmail: string | undefined;
     if (rawToken) {
@@ -383,7 +384,7 @@ export async function POST(req: NextRequest) {
       `;
     }
 
-    return NextResponse.json({
+    const response = NextResponse.json({
       success: true,
       message: `Selamat! Anda berhasil terhubung dengan ${partnerDisplayName}. Workspace pernikahan kini tersinkron!`,
       isRestoredFromSamePartner: Boolean(historicalWedding),
@@ -417,6 +418,17 @@ export async function POST(req: NextRequest) {
       planData: parsedPlanData,
       token: createWorkspaceToken(cleanUserEmail, finalWedding.id),
     });
+
+    const pairToken = createWorkspaceToken(cleanUserEmail, finalWedding.id);
+    response.cookies.set("hajat_workspace_token", pairToken, {
+      path: "/",
+      httpOnly: true,
+      sameSite: "lax",
+      secure: process.env.NODE_ENV === "production",
+      maxAge: 30 * 24 * 60 * 60,
+    });
+
+    return response;
   } catch (error: any) {
     console.error("Error in POST /api/partner/pair:", error);
     return NextResponse.json({ success: false, message: "Terjadi kesalahan internal pada server" }, { status: 500 });

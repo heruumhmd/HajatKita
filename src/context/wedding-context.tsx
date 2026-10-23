@@ -204,8 +204,7 @@ interface WeddingContextType {
   activityLogs: ActivityLog[];
   lifeGoals: LifeSavingsGoal[];
 
-  // Auth Actions
-  login: (userData: Partial<User>) => void;
+  login: (userData: Partial<User>) => Promise<void> | void;
   loginWithGoogle: () => void;
   logout: () => void;
   updateUserProfile: (data: Partial<User>) => void;
@@ -362,20 +361,55 @@ export function autoDetectTypeAndModule(action: string): { actionType: ActivityA
   return { actionType, module: detectedModule };
 }
 
-export function hashPayload(p: any): string {
-  if (!p) return "";
-  const weddingClean = p.wedding
+export function sortKeysRecursively(obj: any): any {
+  if (obj === null || typeof obj !== "object") return obj;
+  if (Array.isArray(obj)) return obj.map(sortKeysRecursively);
+  const sorted: Record<string, any> = {};
+  for (const key of Object.keys(obj).sort()) {
+    if (obj[key] !== undefined) {
+      sorted[key] = sortKeysRecursively(obj[key]);
+    }
+  }
+  return sorted;
+}
+
+export function canonicalizePlanPayload(p: any): Record<string, any> {
+  if (!p) return {};
+  const wedding = p.wedding;
+  const weddingClean = wedding
     ? {
-        ...p.wedding,
+        ...wedding,
         version: undefined,
         id: undefined,
         partnerInfo: undefined,
+        couple: undefined,
       }
     : undefined;
-  return JSON.stringify({
-    ...p,
+
+  return {
     wedding: weddingClean,
-  });
+    savingContributions: Array.isArray(p.savingContributions) ? p.savingContributions : [],
+    checklist: Array.isArray(p.checklist) ? p.checklist : [],
+    seserahan: Array.isArray(p.seserahan) ? p.seserahan : [],
+    postWedding: Array.isArray(p.postWedding) ? p.postWedding : [],
+    guests: Array.isArray(p.guests) ? p.guests : [],
+    familyQuota: p.familyQuota || defaultFamilyQuota,
+    rundown: Array.isArray(p.rundown) ? p.rundown : [],
+    budgetCategories: Array.isArray(p.budgetCategories) ? p.budgetCategories : [],
+    vendors: Array.isArray(p.vendors) ? p.vendors : [],
+    alignmentTopics: Array.isArray(p.alignmentTopics) ? p.alignmentTopics : [],
+    adminSteps: Array.isArray(p.adminSteps) && p.adminSteps.length > 0 ? p.adminSteps : officialAdminSteps,
+    activityLogs: Array.isArray(p.activityLogs) ? p.activityLogs : [],
+    lifeGoals: Array.isArray(p.lifeGoals) ? p.lifeGoals : [],
+    deletedItemIds: Array.isArray(p.deletedItemIds) ? p.deletedItemIds : [],
+  };
+}
+
+export function hashPayload(p: any): string {
+  if (!p) return "";
+  const canonical = canonicalizePlanPayload(p);
+  const normalized = sortKeysRecursively(canonical);
+  return JSON.stringify(normalized);
 }
 
 export function WeddingProvider({ children }: { children: React.ReactNode }) {
@@ -448,6 +482,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   const dirtyAfterFlightRef = useRef(false);
   const latestPayloadRef = useRef<any>(null);
   const isLoggingOutRef = useRef<boolean>(false);
+  const isFetchingDbRef = useRef<boolean>(false);
+  const lastFetchedUserEmailRef = useRef<string | null>(null);
+  const buildPlanPayloadRef = useRef<() => any>(() => ({}));
   const addActivityRef = useRef<((userName: string, userRole: "GROOM" | "BRIDE" | "COLLABORATOR", action: string, options?: any) => void) | null>(null);
 
   useEffect(() => {
@@ -529,16 +566,18 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
   // Keep latest payload ref always updated with latest state
   latestPayloadRef.current = buildPlanPayload();
+  buildPlanPayloadRef.current = buildPlanPayload;
 
   // Load from Database whenever user logs in or polls
   const fetchDbData = useCallback(async (email?: string, code?: string, force = false) => {
     if (isLoggingOutRef.current) return;
+    if (isFetchingDbRef.current && !force) return;
 
     if (!force) {
       // Skip polling while a save is in progress, in flight, or waiting
       if (pendingSaveRef.current || inFlightRef.current || saveTimeoutRef.current !== null) return;
       // Skip polling if there are unsaved local modifications
-      const currentPayload = buildPlanPayload();
+      const currentPayload = latestPayloadRef.current || buildPlanPayloadRef.current();
       const currentHash = hashPayload(currentPayload);
       if (lastServerHashRef.current !== "" && currentHash !== lastServerHashRef.current) {
         if (saveFailedRef.current && retryCountRef.current >= 3) {
@@ -554,10 +593,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       }
     }
 
+    isFetchingDbRef.current = true;
     try {
       const activeUser = currentUserRef.current;
       const activeEmail = (email || activeUser?.email || "").toLowerCase().trim();
-      const inviteCode = code || weddingRef.current.inviteCode;
+      const isSavedWedding = weddingRef.current.id && weddingRef.current.id !== "w-main" && weddingRef.current.id.length > 10;
+      const inviteCode = code || (isSavedWedding ? weddingRef.current.inviteCode : undefined);
       const query = activeEmail
         ? `email=${encodeURIComponent(activeEmail)}${inviteCode ? `&code=${encodeURIComponent(inviteCode)}` : ""}`
         : inviteCode
@@ -572,11 +613,51 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         headers["x-hajat-token"] = token;
       }
 
-      const res = await fetch(`/api/wedding/sync?${query}`, { headers });
-      const data = await res.json();
+      const res = await fetch(`/api/wedding/sync?${query}`, {
+        headers,
+        cache: "no-store",
+      });
+      let data = await res.json();
 
       // Drop stale response if a newer request was dispatched while this was in flight
       if (currentSeq !== requestSeqRef.current) return;
+
+      // Auto-reauthenticate device if unauthorized (e.g. switched device, token expired, or clean browser)
+      if (res.status === 401 && activeEmail && activeUser) {
+        try {
+          const authRes = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: activeEmail,
+              name: activeUser.name,
+              nickname: activeUser.nickname,
+              role: activeUser.role,
+              avatarCardId: activeUser.avatarCardId,
+              phone: activeUser.phone,
+              bio: activeUser.bio,
+            }),
+          });
+          const authData = await authRes.json();
+          if (authData.success && authData.token) {
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("hajat_workspace_token", authData.token);
+              } catch {}
+            }
+            headers["x-hajat-token"] = authData.token;
+            const retryRes = await fetch(`/api/wedding/sync?${query}`, {
+              headers,
+              cache: "no-store",
+            });
+            if (retryRes.ok) {
+              data = await retryRes.json();
+            }
+          }
+        } catch (e) {
+          console.warn("Auto-reauthentication attempt failed", e);
+        }
+      }
 
       if (data.token && typeof window !== "undefined") {
         try {
@@ -584,31 +665,64 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         } catch {}
       }
 
-      hasLoadedRemoteRef.current = true;
+      if (data.success) {
+        hasLoadedRemoteRef.current = true;
+      }
 
       if (data.success && data.exists) {
+        const remoteVersion = typeof data.wedding?.version === "number" ? data.wedding.version : 0;
+
+        // Skip applying redundant state updates on background poll if remote version is already in sync
+        if (
+          !force &&
+          hasLoadedRemoteRef.current &&
+          remoteVersion > 0 &&
+          remoteVersion === versionRef.current &&
+          data.wedding?.id === weddingRef.current.id
+        ) {
+          return;
+        }
+
         if (typeof data.wedding?.version === "number") {
           versionRef.current = data.wedding.version;
         }
 
         if (data.user) {
-          setCurrentUser((prev) => ({
-            id: data.user.id || prev?.id || `u-${crypto.randomUUID()}`,
-            name: data.user.name || prev?.name || "Calon Pengantin",
-            nickname: data.user.nickname || prev?.nickname || "Saya",
-            email: data.user.email || prev?.email || "",
-            image: data.user.image || prev?.image,
-            avatarCardId: data.user.avatarCardId || prev?.avatarCardId || "cat-prince",
-            role: data.user.role || prev?.role || "GROOM",
-            phone: data.user.phone || prev?.phone || "",
-            bio: data.user.bio || prev?.bio || "",
-            provider: prev?.provider || "google",
-          }));
+          setCurrentUser((prev) => {
+            const nextUser: User = {
+              id: data.user.id || prev?.id || `u-${crypto.randomUUID()}`,
+              name: data.user.name || prev?.name || "Calon Pengantin",
+              nickname: data.user.nickname || prev?.nickname || "Saya",
+              email: data.user.email || prev?.email || "",
+              image: data.user.image || prev?.image,
+              avatarCardId: data.user.avatarCardId || prev?.avatarCardId || "cat-prince",
+              role: data.user.role || prev?.role || "GROOM",
+              phone: data.user.phone || prev?.phone || "",
+              bio: data.user.bio || prev?.bio || "",
+              provider: prev?.provider || "google",
+            };
+            if (
+              prev &&
+              prev.id === nextUser.id &&
+              prev.name === nextUser.name &&
+              prev.nickname === nextUser.nickname &&
+              prev.email === nextUser.email &&
+              prev.image === nextUser.image &&
+              prev.avatarCardId === nextUser.avatarCardId &&
+              prev.role === nextUser.role &&
+              prev.phone === nextUser.phone &&
+              prev.bio === nextUser.bio &&
+              prev.provider === nextUser.provider
+            ) {
+              return prev;
+            }
+            return nextUser;
+          });
         }
 
         let updatedWedding = weddingRef.current;
         if (data.wedding) {
-          const userNow = currentUserRef.current;
+          const userNow = { ...currentUserRef.current, ...(data.user || {}) };
           const partnerInfo = getEffectivePartner(data.wedding, userNow);
 
           // Announce partner connection OUTSIDE the updater to prevent duplicate logs in StrictMode
@@ -629,11 +743,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             id: data.wedding.id || weddingRef.current.id,
             version: typeof data.wedding.version === "number" ? data.wedding.version : versionRef.current,
           };
+          weddingRef.current = updatedWedding;
           setWedding(updatedWedding);
         }
 
         const remotePlan = data.planData || {};
-        const localPlan = latestPayloadRef.current || buildPlanPayload();
+        const localPlan = latestPayloadRef.current || buildPlanPayloadRef.current();
 
         // Bi-directional smart reconciliation:
         // Combines local/offline data with remote server data so neither device loses items
@@ -677,25 +792,41 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
         }
 
-        // Bug B: Record applied remote hash based on what server provided.
-        // If local state had additional items merged in, currentPayload will differ from remote hash,
-        // which triggers auto-save naturally to sync those local items up to Neon!
-        lastServerHashRef.current = hashPayload({
+        const remoteHash = hashPayload({
           wedding: updatedWedding,
-          savingContributions: remotePlan.savingContributions || incomingSavings,
-          checklist: remotePlan.checklist || incomingChecklist,
-          seserahan: remotePlan.seserahan || incomingSeserahan,
-          postWedding: remotePlan.postWedding || incomingPostWedding,
-          guests: remotePlan.guests || incomingGuests,
-          familyQuota: remotePlan.familyQuota || incomingFamilyQuota,
-          rundown: remotePlan.rundown || incomingRundown,
-          budgetCategories: remotePlan.budgetCategories || incomingBudgetCategories,
-          vendors: remotePlan.vendors || incomingVendors,
-          alignmentTopics: remotePlan.alignmentTopics || incomingAlignmentTopics,
-          adminSteps: remotePlan.adminSteps || incomingAdminSteps,
-          activityLogs: remotePlan.activityLogs || incomingActivityLogs,
-          lifeGoals: remotePlan.lifeGoals || incomingLifeGoals,
+          ...remotePlan,
+          deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
         });
+
+        const mergedPayload = {
+          wedding: updatedWedding,
+          savingContributions: incomingSavings,
+          checklist: incomingChecklist,
+          seserahan: incomingSeserahan,
+          postWedding: incomingPostWedding,
+          guests: incomingGuests,
+          familyQuota: incomingFamilyQuota,
+          rundown: incomingRundown,
+          budgetCategories: incomingBudgetCategories,
+          vendors: incomingVendors,
+          alignmentTopics: incomingAlignmentTopics,
+          adminSteps: incomingAdminSteps,
+          activityLogs: incomingActivityLogs,
+          lifeGoals: incomingLifeGoals,
+          deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
+        };
+
+        latestPayloadRef.current = canonicalizePlanPayload(mergedPayload);
+        const mergedHash = hashPayload(mergedPayload);
+
+        // If local had extra items not present on server (offline additions),
+        // keep lastServerHashRef as remoteHash so auto-save triggers naturally to push them to Neon.
+        // If local and remote had identical content, record mergedHash so NO spurious auto-save fires!
+        if (mergedHash === remoteHash) {
+          lastServerHashRef.current = mergedHash;
+        } else {
+          lastServerHashRef.current = remoteHash;
+        }
       } else if (data.success && !data.exists) {
         hasLoadedRemoteRef.current = true;
         const currentW = weddingRef.current;
@@ -728,15 +859,28 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       }
     } catch (e) {
       console.warn("Failed to fetch wedding data from database", e);
+    } finally {
+      isFetchingDbRef.current = false;
     }
-  }, [buildPlanPayload]);
+  }, []);
 
-  // Fetch when currentUser changes
+  // Fetch initial cloud data when currentUser email changes (login or account switch)
   useEffect(() => {
-    if (currentUser?.email) {
-      fetchDbData(currentUser.email, weddingRef.current.inviteCode || wedding.inviteCode, true);
+    const email = currentUser?.email?.toLowerCase().trim();
+    if (!email) {
+      lastFetchedUserEmailRef.current = null;
+      return;
     }
-  }, [currentUser?.email, wedding.inviteCode, fetchDbData]);
+
+    if (lastFetchedUserEmailRef.current === email) {
+      return;
+    }
+
+    lastFetchedUserEmailRef.current = email;
+    const targetCode = weddingRef.current.inviteCode;
+    fetchDbData(email, targetCode, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser?.email, fetchDbData]);
 
   // Periodic background synchronization (every 6 seconds when window active)
   useEffect(() => {
@@ -745,15 +889,18 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     const pollSync = () => {
       if (typeof document !== "undefined" && document.hidden) return;
       if (isLoggingOutRef.current) return;
-      if (currentUser?.email) {
-        fetchDbData(currentUser.email);
+      const email = currentUserRef.current?.email;
+      const code = weddingRef.current.inviteCode;
+      const wid = weddingRef.current.id;
+      if (email) {
+        fetchDbData(email);
       } else if (
-        wedding.inviteCode &&
-        wedding.id &&
-        wedding.id.length > 10 &&
-        wedding.id !== "w-main"
+        code &&
+        wid &&
+        wid.length > 10 &&
+        wid !== "w-main"
       ) {
-        fetchDbData(undefined, wedding.inviteCode);
+        fetchDbData(undefined, code);
       }
     };
 
@@ -770,7 +917,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       clearInterval(intervalId);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
     };
-  }, [isInitialized, currentUser?.email, wedding.id, wedding.inviteCode, fetchDbData]);
+  }, [isInitialized, fetchDbData]);
 
   // 1. Initial Load from LocalStorage
   useEffect(() => {
@@ -945,19 +1092,70 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             saveFailedRef.current = false;
             retryCountRef.current = 0;
             saveFailedToastShownRef.current = false;
-            const isTrueConflict = sentVersion === versionRef.current;
             if (typeof resData.version === "number") {
               versionRef.current = resData.version;
             }
-            if (isTrueConflict) {
-              showToastWarning(
-                "Data Diperbarui",
-                "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
-              );
-              await fetchDbData(activeUser?.email, weddingRef.current.inviteCode, true);
+            if (resData.wedding) {
+              const updated = {
+                ...weddingRef.current,
+                ...resData.wedding,
+                version: versionRef.current,
+              };
+              weddingRef.current = updated;
+              setWedding(updated);
+            }
+            if (resData.planData) {
+              const remotePlan = resData.planData;
+              const localPlan = latestPayloadRef.current || buildPlanPayloadRef.current();
+              const mergedPlan = mergePlanData(localPlan, remotePlan);
+
+              const mergedPayload = {
+                ...localPlan,
+                ...mergedPlan,
+                wedding: weddingRef.current,
+              };
+              latestPayloadRef.current = canonicalizePlanPayload(mergedPayload);
+
+              if (Array.isArray(mergedPlan.savingContributions)) setSavingContributions(mergedPlan.savingContributions);
+              if (Array.isArray(mergedPlan.checklist)) setChecklist(mergedPlan.checklist);
+              if (Array.isArray(mergedPlan.seserahan)) setSeserahan(mergedPlan.seserahan);
+              if (Array.isArray(mergedPlan.postWedding)) setPostWedding(mergedPlan.postWedding);
+              if (Array.isArray(mergedPlan.guests)) setGuests(mergedPlan.guests);
+              if (mergedPlan.familyQuota) setFamilyQuota(mergedPlan.familyQuota);
+              if (Array.isArray(mergedPlan.rundown)) setRundown(mergedPlan.rundown);
+              if (Array.isArray(mergedPlan.budgetCategories)) setBudgetCategories(mergedPlan.budgetCategories);
+              if (Array.isArray(mergedPlan.vendors)) setVendors(mergedPlan.vendors);
+              if (Array.isArray(mergedPlan.alignmentTopics)) setAlignmentTopics(mergedPlan.alignmentTopics);
+              if (Array.isArray(mergedPlan.adminSteps)) setAdminSteps(mergedPlan.adminSteps);
+              if (Array.isArray(mergedPlan.activityLogs)) setActivityLogs(mergedPlan.activityLogs);
+              if (Array.isArray(mergedPlan.lifeGoals)) setLifeGoals(mergedPlan.lifeGoals);
+              if (Array.isArray(mergedPlan.deletedItemIds)) {
+                for (const dId of mergedPlan.deletedItemIds) {
+                  deletedItemIdsRef.current.add(dId);
+                }
+                setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+              }
+
+              const remoteHash = hashPayload({
+                wedding: weddingRef.current,
+                ...remotePlan,
+                deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
+              });
+              lastServerHashRef.current = remoteHash;
+
+              const mergedHash = hashPayload(latestPayloadRef.current);
+              dirtyAfterFlightRef.current = false;
+              if (mergedHash !== remoteHash) {
+                // Local modifications need to be committed to server under fresh version.
+                // Schedule debounced save (500ms) after React finishes re-rendering.
+                if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+                saveTimeoutRef.current = setTimeout(() => {
+                  executeSave(0);
+                }, 500);
+              }
             } else {
-              // Self-conflict: version was already bumped locally, flag dirty to save with latest state
-              dirtyAfterFlightRef.current = true;
+              dirtyAfterFlightRef.current = false;
+              await fetchDbData(activeUser?.email, weddingRef.current.inviteCode, true);
             }
             return;
           }
@@ -997,13 +1195,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
               if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
               if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
               if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
+              if (Array.isArray(p.adminSteps)) setAdminSteps(p.adminSteps);
+              if (Array.isArray(p.lifeGoals)) setLifeGoals(p.lifeGoals);
               if (Array.isArray(p.deletedItemIds)) {
                 for (const dId of p.deletedItemIds) {
                   deletedItemIdsRef.current.add(dId);
                 }
                 setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
               }
-              lastServerHashRef.current = hashPayload({
+              const serverSyncedPayload = {
                 wedding: weddingRef.current,
                 savingContributions: p.savingContributions || [],
                 checklist: p.checklist || [],
@@ -1017,8 +1217,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
                 alignmentTopics: p.alignmentTopics || [],
                 adminSteps: p.adminSteps || officialAdminSteps,
                 activityLogs: p.activityLogs || [],
-              });
+                lifeGoals: p.lifeGoals || [],
+                deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
+              };
+              latestPayloadRef.current = canonicalizePlanPayload(serverSyncedPayload);
+              lastServerHashRef.current = hashPayload(serverSyncedPayload);
             } else {
+              latestPayloadRef.current = canonicalizePlanPayload(payloadToSave);
               lastServerHashRef.current = hashPayload(payloadToSave);
             }
           } else {
@@ -1038,7 +1243,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             const nextPayload = latestPayloadRef.current || buildPlanPayload();
             const nextHash = hashPayload(nextPayload);
             if (nextHash !== lastServerHashRef.current) {
-              executeSave(0);
+              if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+              saveTimeoutRef.current = setTimeout(() => {
+                executeSave(0);
+              }, 500);
             }
           }
         }
@@ -1095,6 +1303,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     alignmentTopics,
     adminSteps,
     activityLogs,
+    lifeGoals,
     deletedItemIds,
     buildPlanPayload,
     fetchDbData,
@@ -1103,7 +1312,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   // Explicit sync triggered on actions like copying invite code or link
   const syncNow = useCallback(async (): Promise<boolean> => {
     try {
-      const payload = buildPlanPayload();
+      const payload = latestPayloadRef.current || buildPlanPayloadRef.current();
       const token = typeof window !== "undefined" ? localStorage.getItem("hajat_workspace_token") : null;
       const headers: Record<string, string> = { "Content-Type": "application/json" };
       if (token) {
@@ -1116,7 +1325,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         body: JSON.stringify({
           ...payload,
           baseVersion: versionRef.current,
-          user: currentUser,
+          user: currentUserRef.current,
           token: token || undefined,
         }),
       });
@@ -1130,12 +1339,64 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         if (typeof resData.version === "number") {
           versionRef.current = resData.version;
         }
-        showToastWarning(
-          "Data Diperbarui",
-          "Data diperbarui dari perangkat lain, ulangi perubahan Anda jika perlu"
-        );
-        await fetchDbData(currentUser?.email, wedding.inviteCode, true);
-        return false;
+        if (resData.wedding) {
+          const updated = {
+            ...weddingRef.current,
+            ...resData.wedding,
+            version: versionRef.current,
+          };
+          weddingRef.current = updated;
+          setWedding(updated);
+        }
+        if (resData.planData) {
+          const remotePlan = resData.planData;
+          const localPlan = latestPayloadRef.current || buildPlanPayloadRef.current();
+          const mergedPlan = mergePlanData(localPlan, remotePlan);
+          const mergedPayload = {
+            ...localPlan,
+            ...mergedPlan,
+            wedding: weddingRef.current,
+          };
+          latestPayloadRef.current = canonicalizePlanPayload(mergedPayload);
+
+          if (Array.isArray(mergedPlan.savingContributions)) setSavingContributions(mergedPlan.savingContributions);
+          if (Array.isArray(mergedPlan.checklist)) setChecklist(mergedPlan.checklist);
+          if (Array.isArray(mergedPlan.seserahan)) setSeserahan(mergedPlan.seserahan);
+          if (Array.isArray(mergedPlan.postWedding)) setPostWedding(mergedPlan.postWedding);
+          if (Array.isArray(mergedPlan.guests)) setGuests(mergedPlan.guests);
+          if (mergedPlan.familyQuota) setFamilyQuota(mergedPlan.familyQuota);
+          if (Array.isArray(mergedPlan.rundown)) setRundown(mergedPlan.rundown);
+          if (Array.isArray(mergedPlan.budgetCategories)) setBudgetCategories(mergedPlan.budgetCategories);
+          if (Array.isArray(mergedPlan.vendors)) setVendors(mergedPlan.vendors);
+          if (Array.isArray(mergedPlan.alignmentTopics)) setAlignmentTopics(mergedPlan.alignmentTopics);
+          if (Array.isArray(mergedPlan.adminSteps)) setAdminSteps(mergedPlan.adminSteps);
+          if (Array.isArray(mergedPlan.activityLogs)) setActivityLogs(mergedPlan.activityLogs);
+          if (Array.isArray(mergedPlan.lifeGoals)) setLifeGoals(mergedPlan.lifeGoals);
+          if (Array.isArray(mergedPlan.deletedItemIds)) {
+            for (const dId of mergedPlan.deletedItemIds) {
+              deletedItemIdsRef.current.add(dId);
+            }
+            setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+          }
+          const remoteHash = hashPayload({
+            wedding: weddingRef.current,
+            ...remotePlan,
+            deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
+          });
+          lastServerHashRef.current = remoteHash;
+
+          const mergedHash = hashPayload(latestPayloadRef.current);
+          if (mergedHash !== remoteHash) {
+            if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = setTimeout(async () => {
+              await syncNow();
+            }, 500);
+          }
+          return true;
+        } else {
+          await fetchDbData(currentUserRef.current?.email, weddingRef.current.inviteCode, true);
+          return false;
+        }
       }
 
       if (res.ok && resData.success) {
@@ -1173,13 +1434,15 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           if (Array.isArray(p.alignmentTopics)) setAlignmentTopics(p.alignmentTopics);
           if (Array.isArray(p.savingContributions)) setSavingContributions(p.savingContributions);
           if (Array.isArray(p.activityLogs)) setActivityLogs(p.activityLogs);
+          if (Array.isArray(p.adminSteps)) setAdminSteps(p.adminSteps);
+          if (Array.isArray(p.lifeGoals)) setLifeGoals(p.lifeGoals);
           if (Array.isArray(p.deletedItemIds)) {
             for (const dId of p.deletedItemIds) {
               deletedItemIdsRef.current.add(dId);
             }
             setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
           }
-          lastServerHashRef.current = hashPayload({
+          const serverSyncedPayload = {
             wedding: weddingRef.current,
             savingContributions: p.savingContributions || [],
             checklist: p.checklist || [],
@@ -1193,8 +1456,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
             alignmentTopics: p.alignmentTopics || [],
             adminSteps: p.adminSteps || officialAdminSteps,
             activityLogs: p.activityLogs || [],
-          });
+            lifeGoals: p.lifeGoals || [],
+            deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
+          };
+          latestPayloadRef.current = canonicalizePlanPayload(serverSyncedPayload);
+          lastServerHashRef.current = hashPayload(serverSyncedPayload);
         } else {
+          latestPayloadRef.current = canonicalizePlanPayload(payload);
           lastServerHashRef.current = hashPayload(payload);
         }
         return true;
@@ -1204,17 +1472,24 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       console.warn("Manual sync error", e);
       return false;
     }
-  }, [buildPlanPayload, currentUser, fetchDbData, wedding.inviteCode]);
+  }, [fetchDbData]);
 
   const refreshWorkspace = useCallback(async () => {
-    if (currentUser?.email) {
-      await fetchDbData(currentUser.email, undefined, true);
-    } else if (wedding.inviteCode && wedding.inviteCode !== "HAJAT-89X2") {
-      await fetchDbData(undefined, wedding.inviteCode, true);
+    const userEmail = currentUserRef.current?.email;
+    const inviteCode = weddingRef.current.inviteCode;
+    if (userEmail) {
+      await fetchDbData(userEmail, undefined, true);
+    } else if (
+      inviteCode &&
+      inviteCode !== "HAJAT-89X2" &&
+      weddingRef.current.id !== "w-main" &&
+      weddingRef.current.id.length > 10
+    ) {
+      await fetchDbData(undefined, inviteCode, true);
     } else {
       await syncNow();
     }
-  }, [currentUser?.email, wedding.inviteCode, fetchDbData, syncNow]);
+  }, [fetchDbData, syncNow]);
 
   // Save auth user to localStorage
   useEffect(() => {
@@ -1237,7 +1512,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
   }, [savingContributions]);
 
   // Auth Helpers
-  const login = (userData: Partial<User>) => {
+  const login = async (userData: Partial<User>) => {
     isLoggingOutRef.current = false;
     if (typeof window !== "undefined") {
       try {
@@ -1246,11 +1521,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
 
     const userRole = userData.role || "GROOM";
+    const cleanEmail = (userData.email || "pengantin@hajatkita.id").toLowerCase().trim();
     const user: User = {
       id: userData.id || `u-${crypto.randomUUID()}`,
-      name: userData.name || "Calon Pengantin",
+      name: userData.name || (userRole === "BRIDE" ? "Calon Istri" : "Calon Suami"),
       nickname: userData.nickname || userData.name?.split(" ")[0] || "Saya",
-      email: userData.email || "pengantin@hajatkita.id",
+      email: cleanEmail,
       image: userData.image || undefined,
       avatarCardId: userData.avatarCardId || getDefaultCuteCardForRole(userRole).id,
       role: userRole,
@@ -1259,6 +1535,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       provider: userData.provider || "credentials",
     };
     setCurrentUser(user);
+    currentUserRef.current = user;
     setIsAuthModalOpen(false);
 
     // If wedding groom/bride name is empty, sync from user
@@ -1282,6 +1559,112 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         details: `Sesi login aktif untuk ${user.email}`,
       }
     );
+
+    // Call /api/auth/login to authenticate session and issue signed workspace token
+    try {
+      const res = await fetch("/api/auth/login", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          email: cleanEmail,
+          name: user.name,
+          nickname: user.nickname,
+          role: user.role,
+          avatarCardId: user.avatarCardId,
+          phone: user.phone,
+          bio: user.bio,
+        }),
+      });
+      const data = await res.json();
+      if (data.success && data.token) {
+        if (typeof window !== "undefined") {
+          try {
+            localStorage.setItem("hajat_workspace_token", data.token);
+          } catch {}
+        }
+        if (data.user) {
+          setCurrentUser((prev) => ({
+            ...prev,
+            ...data.user,
+            email: data.user.email || prev?.email || cleanEmail,
+          }));
+          currentUserRef.current = {
+            ...user,
+            ...data.user,
+          };
+        }
+        if (data.wedding) {
+          if (typeof data.wedding.version === "number") {
+            versionRef.current = data.wedding.version;
+          }
+          weddingRef.current = data.wedding;
+          setWedding(data.wedding);
+        }
+        if (data.planData) {
+          const p = data.planData;
+          const incomingSavings = (Array.isArray(p.savingContributions) ? p.savingContributions : []).map((c: any) => ({
+            ...c,
+            id: c.id || `sc-${crypto.randomUUID()}`,
+          }));
+          const incomingChecklist = Array.isArray(p.checklist) ? p.checklist : [];
+          const incomingSeserahan = Array.isArray(p.seserahan) ? p.seserahan : [];
+          const incomingPostWedding = Array.isArray(p.postWedding) ? p.postWedding : [];
+          const incomingGuests = Array.isArray(p.guests) ? p.guests : [];
+          const incomingFamilyQuota = p.familyQuota || defaultFamilyQuota;
+          const incomingRundown = Array.isArray(p.rundown) ? p.rundown : [];
+          const incomingBudgetCategories = Array.isArray(p.budgetCategories) ? p.budgetCategories : [];
+          const incomingVendors = Array.isArray(p.vendors) ? p.vendors : [];
+          const incomingAlignmentTopics = Array.isArray(p.alignmentTopics) ? p.alignmentTopics : [];
+          const incomingAdminSteps = Array.isArray(p.adminSteps) && p.adminSteps.length > 0 ? p.adminSteps : officialAdminSteps;
+          const incomingActivityLogs = Array.isArray(p.activityLogs) ? p.activityLogs : [];
+          const incomingLifeGoals = Array.isArray(p.lifeGoals) ? p.lifeGoals : [];
+
+          setSavingContributions(incomingSavings);
+          setChecklist(incomingChecklist);
+          setSeserahan(incomingSeserahan);
+          setPostWedding(incomingPostWedding);
+          setGuests(incomingGuests);
+          setFamilyQuota(incomingFamilyQuota);
+          setRundown(incomingRundown);
+          setBudgetCategories(incomingBudgetCategories);
+          setVendors(incomingVendors);
+          setAlignmentTopics(incomingAlignmentTopics);
+          setAdminSteps(incomingAdminSteps);
+          setActivityLogs(incomingActivityLogs);
+          setLifeGoals(incomingLifeGoals);
+
+          if (Array.isArray(p.deletedItemIds)) {
+            for (const dId of p.deletedItemIds) {
+              deletedItemIdsRef.current.add(dId);
+            }
+            setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+          }
+
+          hasLoadedRemoteRef.current = true;
+          lastServerHashRef.current = hashPayload({
+            wedding: data.wedding || weddingRef.current,
+            savingContributions: incomingSavings,
+            checklist: incomingChecklist,
+            seserahan: incomingSeserahan,
+            postWedding: incomingPostWedding,
+            guests: incomingGuests,
+            familyQuota: incomingFamilyQuota,
+            rundown: incomingRundown,
+            budgetCategories: incomingBudgetCategories,
+            vendors: incomingVendors,
+            alignmentTopics: incomingAlignmentTopics,
+            adminSteps: incomingAdminSteps,
+            activityLogs: incomingActivityLogs,
+            lifeGoals: incomingLifeGoals,
+            deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
+          });
+        } else {
+          hasLoadedRemoteRef.current = true;
+        }
+      }
+    } catch (err) {
+      console.warn("Login endpoint error:", err);
+    }
 
     // Execute pending action after login if exists
     if (pendingAuthCallbackRef.current) {
@@ -1390,6 +1773,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
     // 5. Reset sync refs
     hasLoadedRemoteRef.current = false;
+    lastFetchedUserEmailRef.current = null;
+    isFetchingDbRef.current = false;
     lastServerHashRef.current = "";
     versionRef.current = 0;
     retryCountRef.current = 0;
@@ -1501,6 +1886,13 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         setActivityLogs(incomingActivityLogs);
         setLifeGoals(incomingLifeGoals);
 
+        if (Array.isArray(p.deletedItemIds)) {
+          for (const dId of p.deletedItemIds) {
+            deletedItemIdsRef.current.add(dId);
+          }
+          setDeletedItemIds(Array.from(deletedItemIdsRef.current).slice(-500));
+        }
+
         lastServerHashRef.current = hashPayload({
           wedding: result.wedding || weddingRef.current,
           savingContributions: incomingSavings,
@@ -1516,7 +1908,12 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           adminSteps: incomingAdminSteps,
           activityLogs: incomingActivityLogs,
           lifeGoals: incomingLifeGoals,
+          deletedItemIds: Array.from(deletedItemIdsRef.current).slice(-500),
         });
+      }
+
+      if (result.wedding || result.planData) {
+        hasLoadedRemoteRef.current = true;
       }
 
       addActivity(

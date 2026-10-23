@@ -37,6 +37,13 @@ const logoutResult = runApiSuite(
 );
 if (!logoutResult.ok) console.log(logoutResult.output);
 
+// 3. Auth Login & Device Switch Authentication Tests
+const loginResult = runApiSuite(
+  "Login Credentials, Workspace Token & Device Switch",
+  "npx tsx --test tests/api/auth-login.test.mjs"
+);
+if (!loginResult.ok) console.log(loginResult.output);
+
 // 3. Partner Unpair & Validation Tests
 const unpairResult = runApiSuite(
   "Partner Unpair Authorization & UUID Validation",

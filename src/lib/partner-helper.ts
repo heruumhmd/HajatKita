@@ -96,15 +96,23 @@ export function getEffectivePartner(
       : (wedding.primaryUserEmail || "");
 
     if (currentUser?.role === "GROOM") {
+      let partnerName = wedding.brideName || "Calon Istri";
+      if (myName && partnerName.toLowerCase().trim() === myName) {
+        partnerName = "Calon Istri";
+      }
       return {
-        name: wedding.brideName || "Calon Istri",
+        name: partnerName,
         role: "BRIDE",
         email: partnerEmail,
         avatarCardId: resolved?.avatarCardId || "duck-bride",
       };
     } else {
+      let partnerName = wedding.groomName || "Calon Suami";
+      if (myName && partnerName.toLowerCase().trim() === myName) {
+        partnerName = "Calon Suami";
+      }
       return {
-        name: wedding.groomName || "Calon Suami",
+        name: partnerName,
         role: "GROOM",
         email: partnerEmail,
         avatarCardId: resolved?.avatarCardId || "penguin-groom",
