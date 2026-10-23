@@ -38,10 +38,10 @@ function normalizeKey(str: any): string {
  * Merges two generic entity lists by ID and optional name/title fallback,
  * respecting deletedItemIds tombstones.
  */
-export function mergeEntityList<T extends { id?: string }>(
+export function mergeEntityList<T extends { id?: string; [key: string]: any }>(
   existingList: T[] = [],
   incomingList: T[] = [],
-  fallbackKeyField?: keyof T,
+  fallbackKeyField?: string,
   deletedIdsSet?: Set<string>
 ): T[] {
   const result: T[] = [];
@@ -56,7 +56,7 @@ export function mergeEntityList<T extends { id?: string }>(
   // Helper to get fallback key
   const getFallbackKey = (item: T): string => {
     if (!fallbackKeyField) return "";
-    return normalizeKey(item[fallbackKeyField]);
+    return normalizeKey((item as any)[fallbackKeyField]);
   };
 
   // Map of incoming items by ID and by fallback key
@@ -107,15 +107,24 @@ export function mergeEntityList<T extends { id?: string }>(
       if ("completed" in exAny || "completed" in incAny) {
         merged.completed = incAny.completed ?? exAny.completed;
       }
+      if ("isDone" in exAny || "isDone" in incAny) {
+        merged.isDone = incAny.isDone ?? exAny.isDone;
+      }
+      if ("isPaid" in exAny || "isPaid" in incAny) {
+        merged.isPaid = incAny.isPaid ?? exAny.isPaid;
+      }
 
       // Preserve notes/details only if incoming property is undefined
       if (exAny.notes !== undefined && incAny.notes === undefined) {
         merged.notes = exAny.notes;
       }
+      if (exAny.note !== undefined && incAny.note === undefined) {
+        merged.note = exAny.note;
+      }
 
       // Merge deposits array for life goals if present
       if (Array.isArray(exAny.deposits) || Array.isArray(incAny.deposits)) {
-        const mergedDeposits = mergeEntityList(
+        const mergedDeposits = mergeEntityList<any>(
           exAny.deposits || [],
           incAny.deposits || [],
           undefined,
@@ -123,6 +132,28 @@ export function mergeEntityList<T extends { id?: string }>(
         );
         merged.deposits = mergedDeposits;
         merged.currentAmount = mergedDeposits.reduce((acc: number, d: any) => acc + (d.amount || 0), 0);
+      }
+
+      // Merge requirements array for adminSteps if present
+      if (Array.isArray(exAny.requirements) || Array.isArray(incAny.requirements)) {
+        const mergedReqs = mergeEntityList<any>(
+          exAny.requirements || [],
+          incAny.requirements || [],
+          "title",
+          deletedIdsSet
+        );
+        merged.requirements = mergedReqs;
+      }
+
+      // Merge stages array for vendors if present
+      if (Array.isArray(exAny.stages) || Array.isArray(incAny.stages)) {
+        const mergedStages = mergeEntityList<any>(
+          exAny.stages || [],
+          incAny.stages || [],
+          "name",
+          deletedIdsSet
+        );
+        merged.stages = mergedStages;
       }
 
       if (merged.id) seenIds.add(merged.id);
@@ -298,7 +329,7 @@ export function mergePlanData(existing: PlanData = {}, incoming: PlanData = {}):
   const mergedAdminSteps = mergeEntityList(
     existing.adminSteps || [],
     incoming.adminSteps || [],
-    "title",
+    "stageName",
     deletedSet
   );
 

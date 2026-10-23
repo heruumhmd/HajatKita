@@ -316,5 +316,108 @@ test("Merge Suite: Unit Tests", async (t) => {
     assert.equal(goal.deposits[0].id, "dep-active-2");
     assert.equal(goal.currentAmount, 5000000, "currentAmount must be recalculated from remaining active deposits");
   });
+
+  // =========================================================================
+  // NESTED MERGE TESTS: adminSteps requirements & vendor stages
+  // =========================================================================
+  await t.test("Nested merge for adminSteps requirements preserves completion and notes", () => {
+    const existing = {
+      adminSteps: [
+        {
+          id: "step-1",
+          stepNumber: 1,
+          stageName: "Surat Pengantar RT/RW",
+          requirements: [
+            { id: "req-1", title: "Fotokopi KTP", isDone: true, note: "Sudah difotokopi 5 lembar" },
+            { id: "req-2", title: "Fotokopi KK", isDone: false },
+          ],
+        },
+      ],
+    };
+
+    const incoming = {
+      adminSteps: [
+        {
+          id: "step-1",
+          stepNumber: 1,
+          stageName: "Surat Pengantar RT/RW",
+          requirements: [
+            { id: "req-1", title: "Fotokopi KTP", isDone: true }, // partner syncs without note
+            { id: "req-2", title: "Fotokopi KK", isDone: true, note: "Diambil dari rumah ibu" }, // partner completed it
+            { id: "req-3", title: "Surat Pengantar RT", isDone: false }, // new requirement added
+          ],
+        },
+      ],
+    };
+
+    const result = mergePlanData(existing, incoming);
+    assert.equal(result.adminSteps.length, 1);
+    const step = result.adminSteps[0];
+    assert.equal(step.requirements.length, 3);
+    const req1 = step.requirements.find((r) => r.id === "req-1");
+    assert.equal(req1.isDone, true);
+    assert.equal(req1.note, "Sudah difotokopi 5 lembar", "Existing note must be preserved if incoming note is undefined");
+    const req2 = step.requirements.find((r) => r.id === "req-2");
+    assert.equal(req2.isDone, true);
+    assert.equal(req2.note, "Diambil dari rumah ibu");
+    const req3 = step.requirements.find((r) => r.id === "req-3");
+    assert.equal(req3.isDone, false);
+  });
+
+  await t.test("Nested merge for vendor stages preserves isPaid and merges by name", () => {
+    const existing = {
+      vendors: [
+        {
+          id: "v-1",
+          vendorName: "Catering Berkah",
+          serviceType: "Catering",
+          totalContract: 50000000,
+          stages: [
+            { name: "DP 30%", percentage: 30, amount: 15000000, isPaid: true, condition: "Saat booking" },
+            { name: "Pelunasan", percentage: 70, amount: 35000000, isPaid: false, condition: "H-7" },
+          ],
+        },
+      ],
+    };
+
+    const incoming = {
+      vendors: [
+        {
+          id: "v-1",
+          vendorName: "Catering Berkah",
+          serviceType: "Catering",
+          totalContract: 50000000,
+          stages: [
+            { name: "DP 30%", percentage: 30, amount: 15000000, isPaid: true, condition: "Saat booking" },
+            { name: "Pelunasan", percentage: 70, amount: 35000000, isPaid: true, condition: "H-7" }, // partner paid pelunasan
+          ],
+        },
+      ],
+    };
+
+    const result = mergePlanData(existing, incoming);
+    assert.equal(result.vendors.length, 1);
+    const vendor = result.vendors[0];
+    assert.equal(vendor.stages.length, 2);
+    assert.equal(vendor.stages[0].isPaid, true);
+    assert.equal(vendor.stages[1].isPaid, true);
+  });
+
+  await t.test("adminSteps fallback key uses stageName when id is absent", () => {
+    const existing = {
+      adminSteps: [
+        { stageName: "KUA & Pemeriksaan Berkas", cost: "Rp 0", agency: "KUA" },
+      ],
+    };
+    const incoming = {
+      adminSteps: [
+        { stageName: "kua & pemeriksaan berkas", cost: "Rp 600.000 (luar kantor)", agency: "KUA" },
+      ],
+    };
+
+    const result = mergePlanData(existing, incoming);
+    assert.equal(result.adminSteps.length, 1, "Must deduplicate by stageName");
+    assert.equal(result.adminSteps[0].cost, "Rp 600.000 (luar kantor)");
+  });
 });
 

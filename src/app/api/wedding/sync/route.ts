@@ -718,8 +718,8 @@ export async function POST(req: NextRequest) {
           END,
           nickname = COALESCE(EXCLUDED.nickname, users.nickname),
           image = COALESCE(EXCLUDED.image, users.image),
-          avatar_card_id = COALESCE(EXCLUDED.avatar_card_id, users.avatar_card_id),
-          role = COALESCE(EXCLUDED.role, users.role),
+          avatar_card_id = COALESCE(users.avatar_card_id, EXCLUDED.avatar_card_id),
+          role = COALESCE(users.role, EXCLUDED.role),
           phone = COALESCE(EXCLUDED.phone, users.phone),
           bio = COALESCE(EXCLUDED.bio, users.bio),
           updated_at = NOW();

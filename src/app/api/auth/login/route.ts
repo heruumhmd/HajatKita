@@ -36,10 +36,14 @@ export async function POST(req: NextRequest) {
         const u = existingUserRows[0];
         const updatedUser = await sql`
           UPDATE users SET
-            name = COALESCE(${name ? cleanName : null}, name),
+            name = CASE 
+              WHEN ${name ? cleanName : null} IS NULL OR ${cleanName} IN ('Calon Suami', 'Calon Istri', 'Calon Pengantin', 'Saya')
+              THEN name
+              ELSE ${cleanName}
+            END,
             nickname = COALESCE(${nickname ? cleanNickname : null}, nickname),
-            role = COALESCE(${role ? cleanRole : null}, role),
-            avatar_card_id = COALESCE(${avatarCardId ? cleanAvatar : null}, avatar_card_id),
+            role = COALESCE(role, ${role ? cleanRole : null}),
+            avatar_card_id = COALESCE(avatar_card_id, ${avatarCardId ? cleanAvatar : null}),
             phone = COALESCE(${phone ? String(phone).trim() : null}, phone),
             bio = COALESCE(${bio ? String(bio).trim() : null}, bio),
             updated_at = NOW()

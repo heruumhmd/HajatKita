@@ -877,7 +877,8 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     }
 
     lastFetchedUserEmailRef.current = email;
-    const targetCode = weddingRef.current.inviteCode;
+    const isSaved = weddingRef.current.id && weddingRef.current.id !== "w-main" && weddingRef.current.id.length > 10;
+    const targetCode = isSaved ? weddingRef.current.inviteCode : undefined;
     fetchDbData(email, targetCode, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser?.email, fetchDbData]);
@@ -932,12 +933,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
         const parsed = JSON.parse(stored);
-        // If stored data contains legacy mock template data ("Heru & Nurul"), purge it cleanly
+        // If stored data contains legacy mock template data, purge it cleanly
         const isLegacyMock =
           parsed.wedding &&
-          (parsed.wedding.title === "Pernikahan Heru & Nurul" ||
-            parsed.wedding.slug === "heru-nurul" ||
-            parsed.wedding.groomName === "Muhammad Heru" ||
+          (parsed.wedding.id === "w-mock-heru-nurul" ||
             parsed.wedding.inviteCode === "HAJAT-89X2");
 
         if (isLegacyMock && !storedUser) {
@@ -1226,6 +1225,65 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
               latestPayloadRef.current = canonicalizePlanPayload(payloadToSave);
               lastServerHashRef.current = hashPayload(payloadToSave);
             }
+          } else if (res.status === 401 && activeUser?.email) {
+            // Auto-reauthenticate device on 401 unauthorized
+            let reauthSuccess = false;
+            try {
+              const authRes = await fetch("/api/auth/login", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({
+                  email: activeUser.email,
+                  name: activeUser.name,
+                  nickname: activeUser.nickname,
+                  role: activeUser.role,
+                  avatarCardId: activeUser.avatarCardId,
+                  phone: activeUser.phone,
+                  bio: activeUser.bio,
+                }),
+              });
+              const authData = await authRes.json();
+              if (authData.success && authData.token) {
+                if (typeof window !== "undefined") {
+                  try {
+                    localStorage.setItem("hajat_workspace_token", authData.token);
+                  } catch {}
+                }
+                const retryRes = await fetch("/api/wedding/sync", {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    "x-hajat-token": authData.token,
+                  },
+                  body: JSON.stringify({
+                    ...payloadToSave,
+                    baseVersion: sentVersion,
+                    user: activeUser,
+                    token: authData.token,
+                  }),
+                });
+                const retryData = await retryRes.json();
+                if (retryRes.ok && retryData.success) {
+                  reauthSuccess = true;
+                  saveFailedRef.current = false;
+                  retryCountRef.current = 0;
+                  saveFailedToastShownRef.current = false;
+                  if (typeof retryData.version === "number") {
+                    versionRef.current = retryData.version;
+                  }
+                  if (retryData.weddingId) {
+                    setWedding((prev) => (prev.id !== retryData.weddingId ? { ...prev, id: retryData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
+                  }
+                  latestPayloadRef.current = canonicalizePlanPayload(payloadToSave);
+                  lastServerHashRef.current = hashPayload(payloadToSave);
+                }
+              }
+            } catch (authErr) {
+              console.warn("Auto-reauthentication error during auto-save:", authErr);
+            }
+            if (!reauthSuccess) {
+              triggerRetry(attempt);
+            }
           } else {
             console.warn("Auto-save returned error from server:", resData?.error || resData?.message);
             triggerRetry(attempt);
@@ -1467,6 +1525,61 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
         }
         return true;
       }
+
+      if (res.status === 401 && currentUserRef.current?.email) {
+        try {
+          const authUser = currentUserRef.current;
+          const authRes = await fetch("/api/auth/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              email: authUser.email,
+              name: authUser.name,
+              nickname: authUser.nickname,
+              role: authUser.role,
+              avatarCardId: authUser.avatarCardId,
+              phone: authUser.phone,
+              bio: authUser.bio,
+            }),
+          });
+          const authData = await authRes.json();
+          if (authData.success && authData.token) {
+            if (typeof window !== "undefined") {
+              try {
+                localStorage.setItem("hajat_workspace_token", authData.token);
+              } catch {}
+            }
+            const retryRes = await fetch("/api/wedding/sync", {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                "x-hajat-token": authData.token,
+              },
+              body: JSON.stringify({
+                ...payload,
+                baseVersion: versionRef.current,
+                user: currentUserRef.current,
+                token: authData.token,
+              }),
+            });
+            const retryData = await retryRes.json();
+            if (retryRes.ok && retryData.success) {
+              if (typeof retryData.version === "number") {
+                versionRef.current = retryData.version;
+              }
+              if (retryData.weddingId) {
+                setWedding((prev) => (prev.id !== retryData.weddingId ? { ...prev, id: retryData.weddingId, version: versionRef.current } : { ...prev, version: versionRef.current }));
+              }
+              latestPayloadRef.current = canonicalizePlanPayload(payload);
+              lastServerHashRef.current = hashPayload(payload);
+              return true;
+            }
+          }
+        } catch (e) {
+          console.warn("syncNow re-auth failed", e);
+        }
+      }
+
       return false;
     } catch (e) {
       console.warn("Manual sync error", e);
@@ -1522,7 +1635,7 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
 
     const userRole = userData.role || "GROOM";
     const cleanEmail = (userData.email || "pengantin@hajatkita.id").toLowerCase().trim();
-    const user: User = {
+    let user: User = {
       id: userData.id || `u-${crypto.randomUUID()}`,
       name: userData.name || (userRole === "BRIDE" ? "Calon Istri" : "Calon Suami"),
       nickname: userData.nickname || userData.name?.split(" ")[0] || "Saya",
@@ -1534,31 +1647,9 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
       bio: userData.bio || "Mempersiapkan pernikahan impian bersama pasangan.",
       provider: userData.provider || "credentials",
     };
-    setCurrentUser(user);
-    currentUserRef.current = user;
-    setIsAuthModalOpen(false);
 
-    // If wedding groom/bride name is empty, sync from user
-    setWedding((prev) => {
-      if (user.role === "GROOM" && !prev.groomName) {
-        return { ...prev, groomName: user.name };
-      }
-      if (user.role === "BRIDE" && !prev.brideName) {
-        return { ...prev, brideName: user.name };
-      }
-      return prev;
-    });
-
-    addActivity(
-      user.name,
-      user.role,
-      `Masuk ke akun (Login via ${user.provider === "google" ? "Google" : "Email"})`,
-      {
-        actionType: "LOGIN",
-        module: "AUTH",
-        details: `Sesi login aktif untuk ${user.email}`,
-      }
-    );
+    // Mark as currently fetching this email to prevent useEffect from firing redundant fetchDbData
+    lastFetchedUserEmailRef.current = cleanEmail;
 
     // Call /api/auth/login to authenticate session and issue signed workspace token
     try {
@@ -1583,14 +1674,10 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
           } catch {}
         }
         if (data.user) {
-          setCurrentUser((prev) => ({
-            ...prev,
-            ...data.user,
-            email: data.user.email || prev?.email || cleanEmail,
-          }));
-          currentUserRef.current = {
+          user = {
             ...user,
             ...data.user,
+            email: data.user.email || cleanEmail,
           };
         }
         if (data.wedding) {
@@ -1665,6 +1752,32 @@ export function WeddingProvider({ children }: { children: React.ReactNode }) {
     } catch (err) {
       console.warn("Login endpoint error:", err);
     }
+
+    setCurrentUser(user);
+    currentUserRef.current = user;
+    setIsAuthModalOpen(false);
+
+    // If wedding groom/bride name is empty, sync from user
+    setWedding((prev) => {
+      if (user.role === "GROOM" && !prev.groomName) {
+        return { ...prev, groomName: user.name };
+      }
+      if (user.role === "BRIDE" && !prev.brideName) {
+        return { ...prev, brideName: user.name };
+      }
+      return prev;
+    });
+
+    addActivity(
+      user.name,
+      user.role,
+      `Masuk ke akun (Login via ${user.provider === "google" ? "Google" : "Email"})`,
+      {
+        actionType: "LOGIN",
+        module: "AUTH",
+        details: `Sesi login aktif untuk ${user.email}`,
+      }
+    );
 
     // Execute pending action after login if exists
     if (pendingAuthCallbackRef.current) {

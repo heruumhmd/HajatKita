@@ -14,7 +14,8 @@ export async function POST(req: NextRequest) {
 
     const rawToken =
       req.headers.get("x-hajat-token") ||
-      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "");
+      req.headers.get("authorization")?.replace(/^Bearer\s+/i, "") ||
+      req.cookies.get("hajat_workspace_token")?.value;
 
     let tokenEmail: string | undefined;
     if (rawToken) {
